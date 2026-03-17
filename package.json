@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "opencode-plugin-starter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Starter repository for building OpenCode plugins with TypeScript",
+  "type": "module",
+  "license": "UNLICENSED",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "clean": "node ./scripts/clean.mjs",
+    "build": "node ./scripts/clean.mjs && ./node_modules/.bin/tsc -p tsconfig.json",
+    "typecheck": "./node_modules/.bin/tsc --noEmit -p tsconfig.json",
+    "dev": "./node_modules/.bin/tsc -w -p tsconfig.json",
+    "check": "./node_modules/.bin/tsc --noEmit -p tsconfig.json && node ./scripts/clean.mjs && ./node_modules/.bin/tsc -p tsconfig.json",
+    "prepack": "./node_modules/.bin/tsc -p tsconfig.json",
+    "pack:npm": "npm pack --dry-run",
+    "pack:bun": "bun pm pack"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.2.27",
+    "@tsconfig/node22": "22.0.2",
+    "@types/node": "22.13.9",
+    "typescript": "5.8.2"
+  }
+}
