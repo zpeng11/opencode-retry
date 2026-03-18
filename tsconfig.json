@@ -6,16 +6,12 @@
     "lib": ["ES2022"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "rootDir": "src",
-    "outDir": "dist",
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
     "strict": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": ["node"],
+    "noEmit": true
   },
-  "include": ["src"],
+  "include": ["src", "tests"],
   "exclude": ["dist", "node_modules"]
 }

@@ -23,21 +23,26 @@
   ],
   "scripts": {
     "clean": "node ./scripts/clean.mjs",
-    "build": "node ./scripts/clean.mjs && ./node_modules/.bin/tsc -p tsconfig.json",
-    "typecheck": "./node_modules/.bin/tsc --noEmit -p tsconfig.json",
-    "dev": "./node_modules/.bin/tsc -w -p tsconfig.json",
-    "check": "./node_modules/.bin/tsc --noEmit -p tsconfig.json && node ./scripts/clean.mjs && ./node_modules/.bin/tsc -p tsconfig.json",
-    "prepack": "./node_modules/.bin/tsc -p tsconfig.json",
+    "build": "node ./scripts/clean.mjs && ./node_modules/.bin/tsc -p tsconfig.build.json",
+    "typecheck": "./node_modules/.bin/tsc --noEmit -p tsconfig.test.json",
+    "dev": "./node_modules/.bin/tsc -w -p tsconfig.build.json",
+    "check": "./node_modules/.bin/tsc --noEmit -p tsconfig.json && node ./scripts/clean.mjs && ./node_modules/.bin/tsc -p tsconfig.build.json",
+    "prepack": "./node_modules/.bin/tsc -p tsconfig.build.json",
     "pack:npm": "npm pack --dry-run",
-    "pack:bun": "bun pm pack"
+    "pack:bun": "bun pm pack",
+    "test": "bun test"
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@opencode-ai/sdk": "0.2.10"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "1.2.27",
     "@tsconfig/node22": "22.0.2",
     "@types/node": "22.13.9",
+    "bun": "latest",
     "typescript": "5.8.2"
   }
 }
