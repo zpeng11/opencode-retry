@@ -192,7 +192,6 @@ describe("prompt boundary capture", () => {
       { toolName: "read", success: true },
       { toolName: "write", success: true },
     ])
-    expect(snapshot.hasSuccessfulToolSideEffects).toBe(true)
     expect(snapshot.messages).toEqual(messageHistory)
   })
 })

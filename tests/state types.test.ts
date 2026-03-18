@@ -21,13 +21,11 @@ describe("state types", () => {
     const state: SessionState = {
       generation: 1,
       retryCount: 0,
-      hasSideEffects: false,
       isEscalated: false,
     }
 
     expect(state.generation).toBe(1)
     expect(state.retryCount).toBe(0)
-    expect(state.hasSideEffects).toBe(false)
     expect(state.isEscalated).toBe(false)
     expect(state.rootMessageID).toBeUndefined()
     expect(state.replayEnvelope).toBeUndefined()
@@ -51,7 +49,6 @@ describe("state types", () => {
       rootMessageID: "msg-456",
       replayEnvelope: envelope,
       retryCount: 1,
-      hasSideEffects: false,
       isEscalated: false,
       pendingIdleGeneration: 2,
     }
@@ -148,7 +145,6 @@ describe("state types", () => {
       generation: 1,
       rootMessageID: "msg-1",
       retryCount: 0,
-      hasSideEffects: false,
       isEscalated: false,
     }
 

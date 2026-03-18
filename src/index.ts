@@ -17,7 +17,6 @@ type Awaitable<T> = T | Promise<T>
 
 interface RuntimeSessionState {
   recentToolOutcomes: DetectorToolOutcome[]
-  hasSuccessfulToolSideEffects: boolean
 }
 
 export interface IdleSnapshot {
@@ -26,7 +25,6 @@ export interface IdleSnapshot {
   tracker: TrackerSessionSnapshot
   messages: SessionMessageHistory
   recentToolOutcomes: DetectorToolOutcome[]
-  hasSuccessfulToolSideEffects: boolean
 }
 
 export interface CreateTruncationRetryHooksOptions {
@@ -50,13 +48,11 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 function createRuntimeSessionState(): RuntimeSessionState {
   return {
     recentToolOutcomes: [],
-    hasSuccessfulToolSideEffects: false,
   }
 }
 
 function resetRuntimeSessionState(state: RuntimeSessionState): void {
   state.recentToolOutcomes = []
-  state.hasSuccessfulToolSideEffects = false
 }
 
 function appendRecentToolOutcome(state: RuntimeSessionState, outcome: DetectorToolOutcome): void {
@@ -133,7 +129,6 @@ export function createTruncationRetryHooks(
       tracker: currentAfterFetch,
       messages,
       recentToolOutcomes,
-      hasSuccessfulToolSideEffects: runtime.hasSuccessfulToolSideEffects,
     })
 
     await attemptSafeReplayTransaction({
@@ -193,10 +188,6 @@ export function createTruncationRetryHooks(
         toolName: hookInput.tool,
         success: true,
       })
-
-      if (classifyCompletedToolExecution({ tool: hookInput.tool }).blocksAutoRetry) {
-        runtime.hasSuccessfulToolSideEffects = true
-      }
     },
 
     async event({ event }) {

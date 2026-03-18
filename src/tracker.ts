@@ -127,7 +127,6 @@ export function createSessionTracker(): SessionTracker {
           rootMessageID: replayEnvelope.rootMessageID,
           replayEnvelope: cloneReplayEnvelope(replayEnvelope),
           retryCount,
-          hasSideEffects: false,
           isEscalated: false,
           pendingIdleGeneration: undefined,
         },

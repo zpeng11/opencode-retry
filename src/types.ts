@@ -127,9 +127,6 @@ export interface SessionState {
   /** Number of automatic retries for the current root prompt. */
   retryCount: number;
 
-  /** Whether side effects (mutations, patches, errors) were recorded. */
-  hasSideEffects: boolean;
-
   /** Whether this turn has already been escalated. Prevents re-escalation. */
   isEscalated: boolean;
 
