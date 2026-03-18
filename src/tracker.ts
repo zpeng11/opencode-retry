@@ -74,7 +74,6 @@ export interface SessionTracker {
 interface TrackerEntry {
   state: SessionState
   lastAssistantMessageID?: string
-  retryCountsByRoot: Map<string, number>
 }
 
 function cloneReplayEnvelope(replayEnvelope?: ReplayEnvelope): ReplayEnvelope | undefined {
@@ -101,37 +100,24 @@ function matchesGeneration(entry: TrackerEntry, generation?: number): boolean {
   return generation === undefined || generation === entry.state.generation
 }
 
-function currentRetryCount(entry: TrackerEntry): number {
-  const rootMessageID = entry.state.rootMessageID
-
-  if (!rootMessageID) {
-    return 0
-  }
-
-  return entry.retryCountsByRoot.get(rootMessageID) ?? 0
-}
-
 export function createSessionTracker(): SessionTracker {
   const sessions = new Map<string, TrackerEntry>()
 
   return {
     startTurn({ sessionID, replayEnvelope }) {
       const existing = sessions.get(sessionID)
-      const retryCountsByRoot = existing?.retryCountsByRoot ?? new Map<string, number>()
       const generation = (existing?.state.generation ?? 0) + 1
-      const retryCount = retryCountsByRoot.get(replayEnvelope.rootMessageID) ?? 0
 
       const entry: TrackerEntry = {
         state: {
           generation,
           rootMessageID: replayEnvelope.rootMessageID,
           replayEnvelope: cloneReplayEnvelope(replayEnvelope),
-          retryCount,
+          retryCount: 0,
           isEscalated: false,
           pendingIdleGeneration: undefined,
         },
         lastAssistantMessageID: undefined,
-        retryCountsByRoot,
       }
 
       sessions.set(sessionID, entry)
@@ -183,7 +169,7 @@ export function createSessionTracker(): SessionTracker {
         return false
       }
 
-      return currentRetryCount(entry) < maxRetries
+      return entry.state.retryCount < maxRetries
     },
 
     recordRetry({ sessionID, maxRetries, generation }) {
@@ -197,13 +183,11 @@ export function createSessionTracker(): SessionTracker {
         return { recorded: false, reason: "stale-generation" }
       }
 
-      const rootMessageID = entry.state.rootMessageID
-
-      if (!rootMessageID || !entry.state.replayEnvelope) {
+      if (!entry.state.rootMessageID || !entry.state.replayEnvelope) {
         return { recorded: false, reason: "missing-root" }
       }
 
-      const retryCount = currentRetryCount(entry)
+      const retryCount = entry.state.retryCount
 
       if (retryCount >= maxRetries) {
         return { recorded: false, reason: "retry-limit-reached" }
@@ -211,7 +195,6 @@ export function createSessionTracker(): SessionTracker {
 
       const nextRetryCount = retryCount + 1
 
-      entry.retryCountsByRoot.set(rootMessageID, nextRetryCount)
       entry.state.retryCount = nextRetryCount
       entry.state.pendingIdleGeneration = undefined
       entry.state.isEscalated = false

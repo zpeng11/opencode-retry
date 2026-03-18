@@ -17,7 +17,7 @@ function createEnvelope(sessionID: string, rootMessageID: string): ReplayEnvelop
 }
 
 describe("retry tracker", () => {
-  test("enforces retry limits per root prompt instead of per session", () => {
+  test("enforces retry limits for the current turn and resets on a new turn", () => {
     const tracker = createSessionTracker()
     const sessionID = "session-1"
 
@@ -55,13 +55,15 @@ describe("retry tracker", () => {
     expect(tracker.canRetry({ sessionID, maxRetries: 2 })).toBe(true)
   })
 
-  test("restores retry counts for the same root lineage and isolates sessions", () => {
+  test("isolates retry counts between sessions and resets on each new turn", () => {
     const tracker = createSessionTracker()
 
-    tracker.startTurn({
+    const firstSessionStart = tracker.startTurn({
       sessionID: "session-1",
       replayEnvelope: createEnvelope("session-1", "root-shared"),
     })
+
+    expect(firstSessionStart.retryCount).toBe(0)
 
     const retry = tracker.recordRetry({ sessionID: "session-1", maxRetries: 2 })
     expect(retry.recorded).toBe(true)
@@ -77,7 +79,7 @@ describe("retry tracker", () => {
       replayEnvelope: createEnvelope("session-1", "root-shared"),
     })
 
-    expect(restored.retryCount).toBe(1)
+    expect(restored.retryCount).toBe(0)
     expect(tracker.canRetry({ sessionID: "session-1", maxRetries: 2 })).toBe(true)
 
     const otherSession = tracker.startTurn({

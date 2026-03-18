@@ -69,7 +69,7 @@ function createTruncatedHistory(replayEnvelope: ReplayEnvelope) {
 }
 
 describe("retry budget enforced", () => {
-  test("blocks a third automatic replay for the same root lineage", async () => {
+  test("a new turn starts with a fresh retry budget", async () => {
     const sessionID = "session-retry-budget"
     const rootMessageID = "root-retry-budget"
     const tracker = createSessionTracker()
@@ -172,9 +172,14 @@ describe("retry budget enforced", () => {
     })
 
     expect(firstResult).toEqual({ outcome: "replayed", retryCount: 1 })
-    expect(secondResult).toEqual({ outcome: "replayed", retryCount: 2 })
-    expect(thirdResult).toEqual({ outcome: "escalated", reason: "retry-budget-exhausted" })
+    expect(secondResult).toEqual({ outcome: "replayed", retryCount: 1 })
+    expect(thirdTurn.retryCount).toBe(0)
+    expect(thirdResult).toEqual({ outcome: "replayed", retryCount: 1 })
     expect(revertCalls).toEqual([
+      {
+        path: { id: sessionID },
+        body: { messageID: rootMessageID },
+      },
       {
         path: { id: sessionID },
         body: { messageID: rootMessageID },
@@ -187,26 +192,11 @@ describe("retry budget enforced", () => {
     expect(promptCalls).toEqual([
       { sessionID, messageID: rootMessageID },
       { sessionID, messageID: rootMessageID },
+      { sessionID, messageID: rootMessageID },
     ])
-    expect(tracker.getSession(sessionID)?.retryCount).toBe(2)
-    expect(tracker.getSession(sessionID)?.isEscalated).toBe(true)
-    expect(toastCalls).toEqual([
-      {
-        body: {
-          title: "Retry stopped",
-          message: "Automatic retries stopped. Review the previous turn.",
-          variant: "warning",
-          duration: 4000,
-        },
-      },
-    ])
-    expect(appendPromptCalls).toEqual([
-      {
-        body: {
-          text:
-            "Review the previous turn, then retry only if it is safe. It may have been truncated or may already have caused side effects.",
-        },
-      },
-    ])
+    expect(tracker.getSession(sessionID)?.retryCount).toBe(1)
+    expect(tracker.getSession(sessionID)?.isEscalated).toBe(false)
+    expect(toastCalls).toEqual([])
+    expect(appendPromptCalls).toEqual([])
   })
 })

@@ -327,7 +327,7 @@ describe("safe auto retry", () => {
     })
     expect(secondSnapshot.generation).toBe(2)
     expect(secondSnapshot.tracker.rootMessageID).toBe(rootMessageID)
-    expect(secondSnapshot.tracker.retryCount).toBe(1)
+    expect(secondSnapshot.tracker.retryCount).toBe(0)
     expect(promptCalls).toHaveLength(1)
   })
 

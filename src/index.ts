@@ -6,10 +6,10 @@ import { MAX_RECENT_TOOL_OUTCOMES, type DetectorToolOutcome } from "./detector.j
 import {
   attemptSafeReplayTransaction,
   listSessionMessages,
+  type ReplayTransactionResult,
   type ReplaySubmissionClientFactory,
   type SessionMessageHistory,
 } from "./replay.js"
-import { classifyCompletedToolExecution } from "./side-effects.js"
 import { createSessionTracker, type TrackerSessionSnapshot } from "./tracker.js"
 import type { PluginConfig, ReplayEnvelope } from "./types.js"
 
@@ -106,6 +106,16 @@ export function createTruncationRetryHooks(
     return created
   }
 
+  function cleanupSessionTracking(sessionID: string): void {
+    sessionState.delete(sessionID)
+    tracker.clearSession(sessionID)
+    idleQueue.delete(sessionID)
+  }
+
+  function shouldCleanupAfterReplayResult(result: ReplayTransactionResult): boolean {
+    return result.outcome === "escalated" || (result.outcome === "ignored" && result.reason === "normal-turn")
+  }
+
   async function runIdleSnapshot(snapshot: TrackerSessionSnapshot): Promise<void> {
     const currentBeforeFetch = tracker.getSession(snapshot.sessionID)
 
@@ -131,7 +141,7 @@ export function createTruncationRetryHooks(
       recentToolOutcomes,
     })
 
-    await attemptSafeReplayTransaction({
+    const replayResult = await attemptSafeReplayTransaction({
       client: input.client,
       tracker,
       config,
@@ -142,6 +152,10 @@ export function createTruncationRetryHooks(
       serverUrl: input.serverUrl,
       replayClientFactory: options.replayClientFactory,
     })
+
+    if (shouldCleanupAfterReplayResult(replayResult)) {
+      cleanupSessionTracking(snapshot.sessionID)
+    }
   }
 
   function enqueueIdleSnapshot(snapshot: TrackerSessionSnapshot): void {

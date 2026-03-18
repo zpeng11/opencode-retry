@@ -166,6 +166,7 @@ describe("escalation dedupe", () => {
     await hooks["chat.message"]?.(args.hookInput as never, args.hookOutput as never)
     await hooks.event?.({ event: createIdleEvent(sessionID) as never })
     await promptAppended.promise
+    await new Promise((resolve) => setTimeout(resolve, 0))
 
     await hooks.event?.({ event: createIdleEvent(sessionID) as never })
     await Promise.resolve()
