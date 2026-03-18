@@ -44,13 +44,20 @@ describe("classifier payload", () => {
         data: { message: "Network hop failed unexpectedly." },
       },
       recentToolOutcomes: [
-        { toolName: "read", success: true },
-        { toolName: "glob", success: true },
+        { toolName: "read", success: true, toolArgs: { file: "README.md" } },
+        { toolName: "glob", success: true, toolArgs: { pattern: "src/**/*.ts" } },
         { toolName: "grep", success: true },
         {
           toolName: "bash",
           success: false,
           errorMessage: "E".repeat(220),
+          toolArgs: {
+            command: "printf '%s' '".concat("x".repeat(400), "'"),
+            description: "Inspect generated output",
+            nested: {
+              values: ["one", "two", "three", "four", "five"],
+            },
+          },
         },
       ],
       recentToolOutcomeWindow: 2,
@@ -74,8 +81,19 @@ describe("classifier payload", () => {
     expect(payload.lastAssistantText).toHaveLength(1600)
     expect(payload.finishError).toBe("UnknownError: Network hop failed unexpectedly.")
     expect(payload.recentToolOutcomes).toEqual([
-      { toolName: "grep", success: true, errorMessage: undefined },
-      { toolName: "bash", success: false, errorMessage: `${"E".repeat(157)}...` },
+      { toolName: "grep", success: true, errorMessage: undefined, toolArgs: undefined },
+      {
+        toolName: "bash",
+        success: false,
+        errorMessage: `${"E".repeat(157)}...`,
+        toolArgs: {
+          command: `printf '%s' '${"x".repeat(224)}...`,
+          description: "Inspect generated output",
+          nested: {
+            values: ["one", "two", "three", "four"],
+          },
+        },
+      },
     ])
     expect(payload.retryCount).toBe(2)
   })
@@ -86,8 +104,8 @@ describe("classifier payload", () => {
       lastAssistantText: "Completed successfully.",
       finishReason: "stop",
       recentToolOutcomes: [
-        { toolName: "read", success: true },
-        { toolName: "glob", success: true },
+        { toolName: "read", success: true, toolArgs: { file: "README.md" } },
+        { toolName: "glob", success: true, toolArgs: { pattern: "src/**/*.ts" } },
       ],
       retryCount: 1,
     } as const

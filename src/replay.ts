@@ -13,9 +13,16 @@ export type SessionMessageHistory = Array<{
   parts: Part[]
 }>
 
+export const RECENT_MESSAGE_PAGE_SIZE = 8
+
+interface SessionMessagesQuery {
+  limit?: number
+  before?: string
+}
+
 export interface ReplayTransactionClient {
   session?: {
-    messages?: (parameters: { path: { id: string } }) => Promise<{ data?: unknown }>
+    messages?: (parameters: { path: { id: string }; query?: SessionMessagesQuery }) => Promise<{ data?: unknown }>
     status?: () => Promise<{ data?: unknown }>
     revert?: (parameters: { path: { id: string }; body: { messageID: string; partID?: string } }) => Promise<unknown>
     unrevert?: (parameters: { path: { id: string } }) => Promise<unknown>
@@ -69,6 +76,7 @@ export interface AttemptSafeReplayTransactionInput {
   config: PluginConfig
   sessionID: string
   generation: number
+  prefetchedMessages?: SessionMessageHistory
   recentToolOutcomes?: readonly DetectorToolOutcome[]
   directory?: string
   serverUrl?: URL
@@ -82,6 +90,8 @@ export type ReplayIgnoredReason =
   | "missing-assistant-message"
   | "missing-session"
   | "normal-turn"
+  | "structured-output-complete"
+  | "structured-output-error"
   | "stale-generation"
 
 export type ReplayEscalationReason = JudgmentEscalationReason
@@ -95,6 +105,7 @@ interface AssistantMessageLike {
   role?: string
   finish?: string
   error?: unknown
+  structured?: unknown
 }
 
 interface SessionStatusLike {
@@ -155,6 +166,15 @@ function getAssistantText(parts: readonly Part[]): string {
     .filter((part) => !part.ignored)
     .map((part) => part.text ?? "")
     .join("")
+}
+
+function hasStructuredOutputResult(message: SessionMessageHistory[number]): boolean {
+  const info = asRecord(message.info)
+  return Boolean(info && Object.prototype.hasOwnProperty.call(info, "structured") && info.structured !== undefined)
+}
+
+function isStructuredOutputError(error: unknown): boolean {
+  return normalizeOptionalString(asRecord(error)?.name) === "StructuredOutputError"
 }
 
 function getFinishReason(message: SessionMessageHistory[number]): string | undefined {
@@ -222,9 +242,25 @@ async function getCurrentStatus(client: ReplayTransactionClient, sessionID: stri
 export async function listSessionMessages(
   client: ReplayTransactionClient,
   sessionID: string,
+  options: SessionMessagesQuery = {},
 ): Promise<SessionMessageHistory> {
-  const response = await client.session?.messages?.({ path: { id: sessionID } })
+  const response = await client.session?.messages?.({
+    path: { id: sessionID },
+    ...(Object.keys(options).length > 0 ? { query: options } : {}),
+  })
   return cloneValue((response?.data ?? []) as SessionMessageHistory)
+}
+
+async function listReplayCandidateMessages(
+  client: ReplayTransactionClient,
+  sessionID: string,
+): Promise<SessionMessageHistory> {
+  const recentMessages = await listSessionMessages(client, sessionID, { limit: RECENT_MESSAGE_PAGE_SIZE })
+  if (getLastAssistantMessage(recentMessages) || recentMessages.length < RECENT_MESSAGE_PAGE_SIZE) {
+    return recentMessages
+  }
+
+  return listSessionMessages(client, sessionID)
 }
 
 export const createDefaultReplayClientFactory: ReplaySubmissionClientFactory = ({ directory, serverUrl }) => {
@@ -249,8 +285,17 @@ async function classifyTurnForReplay(input: {
   recentToolOutcomes?: readonly DetectorToolOutcome[]
   retryCount: number
 }): Promise<TurnReplayDisposition> {
+  if (hasStructuredOutputResult(input.lastAssistantMessage)) {
+    return { action: "ignore", reason: "structured-output-complete" }
+  }
+
+  const finishError = (input.lastAssistantMessage.info as AssistantMessageLike).error
+  if (isStructuredOutputError(finishError)) {
+    return { action: "ignore", reason: "structured-output-error" }
+  }
+
   const sideEffects = assessSideEffects({
-    completedTools: input.recentToolOutcomes?.map((outcome) => ({ tool: outcome.toolName })),
+    completedTools: input.recentToolOutcomes?.map((outcome) => ({ tool: outcome.toolName, args: outcome.toolArgs })),
     parts: input.lastAssistantMessage.parts,
   })
   if (sideEffects.blocksAutoRetry) {
@@ -259,7 +304,6 @@ async function classifyTurnForReplay(input: {
 
   const lastAssistantText = getAssistantText(input.lastAssistantMessage.parts)
   const finishReason = getFinishReason(input.lastAssistantMessage)
-  const finishError = (input.lastAssistantMessage.info as AssistantMessageLike).error
   const detection = detectTruncation({
     lastAssistantText,
     finishReason,
@@ -327,7 +371,9 @@ export async function attemptSafeReplayTransaction(
       return { outcome: "ignored", reason: "busy-session" }
     }
 
-    messages = await listSessionMessages(input.client, input.sessionID)
+    messages = input.prefetchedMessages
+      ? cloneValue(input.prefetchedMessages)
+      : await listReplayCandidateMessages(input.client, input.sessionID)
   } catch {
     input.tracker.clearPendingIdleForGeneration({ sessionID: input.sessionID, generation: input.generation })
     return { outcome: "ignored", reason: "client-read-failed" }

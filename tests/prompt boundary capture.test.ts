@@ -189,8 +189,8 @@ describe("prompt boundary capture", () => {
     expect(snapshot.tracker.pendingIdleGeneration).toBe(1)
     expect(snapshot.tracker.replayEnvelope).toEqual(expectedReplayEnvelope as never)
     expect(snapshot.recentToolOutcomes).toEqual([
-      { toolName: "read", success: true },
-      { toolName: "write", success: true },
+      { toolName: "read", success: true, toolArgs: {} },
+      { toolName: "write", success: true, toolArgs: {} },
     ])
     expect(snapshot.messages).toEqual(messageHistory)
   })

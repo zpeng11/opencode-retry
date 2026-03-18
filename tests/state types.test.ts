@@ -88,8 +88,8 @@ describe("state types", () => {
       lastAssistantText: "Here is my response...",
       finishReason: "length",
       recentToolOutcomes: [
-        { toolName: "bash", success: true },
-        { toolName: "write", success: false, errorMessage: "Permission denied" },
+        { toolName: "bash", success: true, toolArgs: { command: "git status --short" } },
+        { toolName: "write", success: false, errorMessage: "Permission denied", toolArgs: { file: "src/app.ts" } },
       ],
       retryCount: 1,
     }
@@ -99,6 +99,7 @@ describe("state types", () => {
     expect(payload.recentToolOutcomes).toHaveLength(2)
     expect(payload.recentToolOutcomes[1].toolName).toBe("write")
     expect(payload.recentToolOutcomes[1].success).toBe(false)
+    expect(payload.recentToolOutcomes[1].toolArgs).toEqual({ file: "src/app.ts" })
     expect(payload.retryCount).toBe(1)
   })
 

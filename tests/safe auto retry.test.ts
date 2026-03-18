@@ -234,6 +234,139 @@ function createClassifierHistory(replayEnvelope: ReplayEnvelope) {
   ]
 }
 
+function createReadOnlyBashTruncatedHistory(replayEnvelope: ReplayEnvelope) {
+  return [
+    {
+      info: {
+        id: replayEnvelope.rootMessageID,
+        role: "user",
+      },
+      parts: replayEnvelope.parts,
+    },
+    {
+      info: {
+        id: "assistant-bash-truncated",
+        sessionID: replayEnvelope.sessionID,
+        role: "assistant",
+        parentID: replayEnvelope.rootMessageID,
+        time: { created: 2, completed: 3 },
+        modelID: "gpt-4o",
+        providerID: "openai",
+        mode: "chat",
+        agent: replayEnvelope.agent,
+        path: { cwd: "/tmp/opencode-retry", root: "/tmp/opencode-retry" },
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        finish: "length",
+      },
+      parts: [
+        {
+          id: "assistant-bash-tool",
+          sessionID: replayEnvelope.sessionID,
+          messageID: "assistant-bash-truncated",
+          type: "tool",
+          tool: "bash",
+          state: {
+            status: "completed",
+            input: {
+              command: "git status --short",
+              description: "Shows working tree status",
+            },
+            output: " M src/index.ts",
+            title: "Shows working tree status",
+            metadata: {
+              output: " M src/index.ts",
+              description: "Shows working tree status",
+            },
+            time: { start: 1, end: 2 },
+          },
+        },
+        {
+          id: "assistant-bash-text",
+          sessionID: replayEnvelope.sessionID,
+          messageID: "assistant-bash-truncated",
+          type: "text",
+          text: "{\"answer\": \"worktree",
+        },
+        {
+          id: "assistant-bash-finish",
+          sessionID: replayEnvelope.sessionID,
+          messageID: "assistant-bash-truncated",
+          type: "step-finish",
+          reason: "length",
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        },
+      ],
+    },
+  ]
+}
+
+function createReadOnlyWebFetchTruncatedHistory(replayEnvelope: ReplayEnvelope) {
+  return [
+    {
+      info: {
+        id: replayEnvelope.rootMessageID,
+        role: "user",
+      },
+      parts: replayEnvelope.parts,
+    },
+    {
+      info: {
+        id: "assistant-webfetch-truncated",
+        sessionID: replayEnvelope.sessionID,
+        role: "assistant",
+        parentID: replayEnvelope.rootMessageID,
+        time: { created: 2, completed: 3 },
+        modelID: "gpt-4o",
+        providerID: "openai",
+        mode: "chat",
+        agent: replayEnvelope.agent,
+        path: { cwd: "/tmp/opencode-retry", root: "/tmp/opencode-retry" },
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        finish: "length",
+      },
+      parts: [
+        {
+          id: "assistant-webfetch-tool",
+          sessionID: replayEnvelope.sessionID,
+          messageID: "assistant-webfetch-truncated",
+          type: "tool",
+          tool: "webfetch",
+          state: {
+            status: "completed",
+            input: {
+              url: "https://example.com/docs",
+            },
+            output: "Fetched example content",
+            metadata: {
+              contentType: "text/html",
+            },
+            time: { start: 1, end: 2 },
+          },
+        },
+        {
+          id: "assistant-webfetch-text",
+          sessionID: replayEnvelope.sessionID,
+          messageID: "assistant-webfetch-truncated",
+          type: "text",
+          text: "{\"answer\": \"fetched",
+        },
+        {
+          id: "assistant-webfetch-finish",
+          sessionID: replayEnvelope.sessionID,
+          messageID: "assistant-webfetch-truncated",
+          type: "step-finish",
+          reason: "length",
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        },
+      ],
+    },
+  ]
+}
+
 describe("safe auto retry", () => {
   test("reverts to the root boundary and replays the preserved envelope once", async () => {
     const sessionID = "session-safe-replay"
@@ -435,5 +568,177 @@ describe("safe auto retry", () => {
     } finally {
       globalThis.fetch = previousFetch
     }
+  })
+
+  test("replays after a completed read-only bash command when the answer truncates later", async () => {
+    const sessionID = "session-safe-bash-replay"
+    const rootMessageID = "root-safe-bash"
+    const replayEnvelope = createReplayEnvelope(sessionID, rootMessageID)
+    const revertCalls: Array<{ path: { id: string }; body: { messageID: string } }> = []
+    const promptCalls: ReplaySubmissionRequest[] = []
+    const replaySubmitted = deferred<void>()
+    let hooks!: ReturnType<typeof createTruncationRetryHooks>
+    let currentHistory = createReadOnlyBashTruncatedHistory(replayEnvelope)
+
+    const client = {
+      session: {
+        async messages() {
+          return { data: structuredClone(currentHistory) }
+        },
+        async status() {
+          return { data: {} }
+        },
+        async revert(input: { path: { id: string }; body: { messageID: string } }) {
+          revertCalls.push(input)
+          return { data: true }
+        },
+        async unrevert() {
+          throw new Error("read-only bash replay should not unrevert")
+        },
+      },
+      tui: {
+        async showToast() {
+          throw new Error("read-only bash replay should not notify")
+        },
+      },
+    } as unknown as PluginInput["client"]
+
+    hooks = createTruncationRetryHooks(
+      {
+        client,
+        directory: "/tmp/opencode-retry",
+        serverUrl: new URL("https://example.com"),
+      },
+      {
+        config: createEnabledConfig(),
+        replayClientFactory: () => ({
+          session: {
+            async prompt(input) {
+              promptCalls.push(structuredClone(input))
+              replaySubmitted.resolve()
+              return { data: true }
+            },
+          },
+        }),
+      },
+    )
+
+    const initialArgs = createChatMessageArgs(replayEnvelope)
+    await hooks["chat.message"]?.(initialArgs.hookInput as never, initialArgs.hookOutput as never)
+    await hooks["tool.execute.after"]?.(
+      {
+        tool: "bash",
+        sessionID,
+        callID: "call-bash-1",
+        args: {
+          command: "git status --short",
+          description: "Shows working tree status",
+        },
+      },
+      {
+        title: "Shows working tree status",
+        output: " M src/index.ts",
+        metadata: {
+          output: " M src/index.ts",
+          description: "Shows working tree status",
+        },
+      },
+    )
+    await hooks.event?.({ event: createIdleEvent(sessionID) as never })
+    await replaySubmitted.promise
+
+    expect(revertCalls).toEqual([
+      {
+        path: { id: sessionID },
+        body: { messageID: rootMessageID },
+      },
+    ])
+    expect(promptCalls).toHaveLength(1)
+    expect(promptCalls[0].messageID).toBe(rootMessageID)
+  })
+
+  test("replays after a completed webfetch tool call when the answer truncates later", async () => {
+    const sessionID = "session-safe-webfetch-replay"
+    const rootMessageID = "root-safe-webfetch"
+    const replayEnvelope = createReplayEnvelope(sessionID, rootMessageID)
+    const revertCalls: Array<{ path: { id: string }; body: { messageID: string } }> = []
+    const promptCalls: ReplaySubmissionRequest[] = []
+    const replaySubmitted = deferred<void>()
+    let hooks!: ReturnType<typeof createTruncationRetryHooks>
+    let currentHistory = createReadOnlyWebFetchTruncatedHistory(replayEnvelope)
+
+    const client = {
+      session: {
+        async messages() {
+          return { data: structuredClone(currentHistory) }
+        },
+        async status() {
+          return { data: {} }
+        },
+        async revert(input: { path: { id: string }; body: { messageID: string } }) {
+          revertCalls.push(input)
+          return { data: true }
+        },
+        async unrevert() {
+          throw new Error("read-only webfetch replay should not unrevert")
+        },
+      },
+      tui: {
+        async showToast() {
+          throw new Error("read-only webfetch replay should not notify")
+        },
+      },
+    } as unknown as PluginInput["client"]
+
+    hooks = createTruncationRetryHooks(
+      {
+        client,
+        directory: "/tmp/opencode-retry",
+        serverUrl: new URL("https://example.com"),
+      },
+      {
+        config: createEnabledConfig(),
+        replayClientFactory: () => ({
+          session: {
+            async prompt(input) {
+              promptCalls.push(structuredClone(input))
+              replaySubmitted.resolve()
+              return { data: true }
+            },
+          },
+        }),
+      },
+    )
+
+    const initialArgs = createChatMessageArgs(replayEnvelope)
+    await hooks["chat.message"]?.(initialArgs.hookInput as never, initialArgs.hookOutput as never)
+    await hooks["tool.execute.after"]?.(
+      {
+        tool: "webfetch",
+        sessionID,
+        callID: "call-webfetch-1",
+        args: {
+          url: "https://example.com/docs",
+        },
+      },
+      {
+        title: "Fetches example docs",
+        output: "Fetched example content",
+        metadata: {
+          contentType: "text/html",
+        },
+      },
+    )
+    await hooks.event?.({ event: createIdleEvent(sessionID) as never })
+    await replaySubmitted.promise
+
+    expect(revertCalls).toEqual([
+      {
+        path: { id: sessionID },
+        body: { messageID: rootMessageID },
+      },
+    ])
+    expect(promptCalls).toHaveLength(1)
+    expect(promptCalls[0].messageID).toBe(rootMessageID)
   })
 })

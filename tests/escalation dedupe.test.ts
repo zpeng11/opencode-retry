@@ -172,7 +172,7 @@ describe("escalation dedupe", () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(messagesCallCount).toBe(2)
+    expect(messagesCallCount).toBe(1)
     expect(toastCalls).toHaveLength(1)
     expect(appendPromptCalls).toHaveLength(1)
   })

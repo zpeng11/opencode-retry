@@ -64,6 +64,7 @@ export interface ClassifierPayload {
     toolName: string;
     success: boolean;
     errorMessage?: string;
+    toolArgs?: unknown;
   }>;
 
   /** Current retry count for this root prompt. */

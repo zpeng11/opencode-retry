@@ -53,6 +53,7 @@ export interface DetectorToolOutcome {
   toolName: string
   success: boolean
   errorMessage?: string
+  toolArgs?: unknown
 }
 
 export interface DetectTruncationInput {
@@ -362,6 +363,7 @@ export function buildClassifierPayload(input: BuildClassifierPayloadInput): Clas
       errorMessage: outcome.success
         ? undefined
         : truncateString(normalizeOptionalString(outcome.errorMessage), MAX_TOOL_ERROR_CHARS),
+      toolArgs: outcome.toolArgs === undefined ? undefined : sanitizeUnknownValue(outcome.toolArgs),
     }))
 
   return {

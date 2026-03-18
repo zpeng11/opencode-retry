@@ -113,7 +113,13 @@ export function createTruncationRetryHooks(
   }
 
   function shouldCleanupAfterReplayResult(result: ReplayTransactionResult): boolean {
-    return result.outcome === "escalated" || (result.outcome === "ignored" && result.reason === "normal-turn")
+    return (
+      result.outcome === "escalated" ||
+      (result.outcome === "ignored" &&
+        (result.reason === "normal-turn" ||
+          result.reason === "structured-output-complete" ||
+          result.reason === "structured-output-error"))
+    )
   }
 
   async function runIdleSnapshot(snapshot: TrackerSessionSnapshot): Promise<void> {
@@ -123,23 +129,26 @@ export function createTruncationRetryHooks(
       return
     }
 
-    const messages = await listSessionMessages(input.client, snapshot.sessionID)
-    const currentAfterFetch = tracker.getSession(snapshot.sessionID)
-
-    if (!currentAfterFetch || currentAfterFetch.generation !== snapshot.generation || currentAfterFetch.isEscalated) {
-      return
-    }
-
     const runtime = getOrCreateRuntimeSession(snapshot.sessionID)
     const recentToolOutcomes = cloneValue(runtime.recentToolOutcomes)
+    let prefetchedMessages: SessionMessageHistory | undefined
 
-    await options.onIdleSnapshot?.({
-      sessionID: snapshot.sessionID,
-      generation: snapshot.generation,
-      tracker: currentAfterFetch,
-      messages,
-      recentToolOutcomes,
-    })
+    if (options.onIdleSnapshot) {
+      prefetchedMessages = await listSessionMessages(input.client, snapshot.sessionID)
+      const currentAfterFetch = tracker.getSession(snapshot.sessionID)
+
+      if (!currentAfterFetch || currentAfterFetch.generation !== snapshot.generation || currentAfterFetch.isEscalated) {
+        return
+      }
+
+      await options.onIdleSnapshot({
+        sessionID: snapshot.sessionID,
+        generation: snapshot.generation,
+        tracker: currentAfterFetch,
+        messages: prefetchedMessages,
+        recentToolOutcomes,
+      })
+    }
 
     const replayResult = await attemptSafeReplayTransaction({
       client: input.client,
@@ -147,6 +156,7 @@ export function createTruncationRetryHooks(
       config,
       sessionID: snapshot.sessionID,
       generation: snapshot.generation,
+      prefetchedMessages,
       recentToolOutcomes,
       directory: input.directory,
       serverUrl: input.serverUrl,
@@ -201,6 +211,7 @@ export function createTruncationRetryHooks(
       appendRecentToolOutcome(runtime, {
         toolName: hookInput.tool,
         success: true,
+        ...(hookInput.args !== undefined ? { toolArgs: cloneValue(hookInput.args) } : {}),
       })
     },
 
