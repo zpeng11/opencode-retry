@@ -22,7 +22,7 @@ export enum ClassifierResult {
  * Fail-fast on invalid/incomplete config when classification is enabled.
  */
 export interface PluginConfig {
-  /** Whether the truncation retry plugin is enabled. Defaults to false. */
+  /** Whether the truncation retry plugin is enabled. Defaults to true unless explicitly set to false. */
   enabled: boolean;
 
   /** OpenAI-compatible classifier endpoint (e.g., https://api.openai.com/v1/chat/completions). */

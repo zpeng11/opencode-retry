@@ -6,7 +6,7 @@ import { ClassifierResult } from "./types.js"
  * Fail loudly if classification is configured but required fields are missing.
  */
 export function loadConfig(): PluginConfig {
-  const enabled = process.env.OPENCODE_PLUGIN_RETRY_ENABLED === "true"
+  const enabled = process.env.OPENCODE_PLUGIN_RETRY_ENABLED !== "false"
 
   // If disabled, return a minimal config that won't attempt classification
   if (!enabled) {
@@ -24,17 +24,17 @@ export function loadConfig(): PluginConfig {
 
   if (!endpoint) {
     throw new Error(
-      "OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT is required when enabled=true"
+      "OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT is required unless OPENCODE_PLUGIN_RETRY_ENABLED=false"
     )
   }
   if (!model) {
     throw new Error(
-      "OPENCODE_PLUGIN_RETRY_CLASSIFIER_MODEL is required when enabled=true"
+      "OPENCODE_PLUGIN_RETRY_CLASSIFIER_MODEL is required unless OPENCODE_PLUGIN_RETRY_ENABLED=false"
     )
   }
   if (!apiKey) {
     throw new Error(
-      "OPENCODE_PLUGIN_RETRY_CLASSIFIER_API_KEY is required when enabled=true"
+      "OPENCODE_PLUGIN_RETRY_CLASSIFIER_API_KEY is required unless OPENCODE_PLUGIN_RETRY_ENABLED=false"
     )
   }
 

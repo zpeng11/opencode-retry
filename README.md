@@ -23,7 +23,7 @@ This plugin automatically detects and retries truncated assistant responses in O
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OPENCODE_PLUGIN_RETRY_ENABLED` | Set to `true` to enable the plugin. | `false` |
+| `OPENCODE_PLUGIN_RETRY_ENABLED` | Set to `false` to disable the plugin. | `true` |
 | `OPENCODE_PLUGIN_RETRY_MAX_RETRIES` | Max auto-retries per root user prompt (capped at 2). | `2` |
 | `OPENCODE_PLUGIN_RETRY_CLASSIFIER_TIMEOUT_MS` | Timeout for the classifier request. | `5000` |
 
@@ -31,9 +31,9 @@ This plugin automatically detects and retries truncated assistant responses in O
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT` | OpenAI-compatible API endpoint for the classifier. | (Required if enabled) |
-| `OPENCODE_PLUGIN_RETRY_CLASSIFIER_MODEL` | Model ID to use for classification. | (Required if enabled) |
-| `OPENCODE_PLUGIN_RETRY_CLASSIFIER_API_KEY` | API key for the classifier endpoint. | (Required if enabled) |
+| `OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT` | OpenAI-compatible API endpoint for the classifier. | (Required unless disabled) |
+| `OPENCODE_PLUGIN_RETRY_CLASSIFIER_MODEL` | Model ID to use for classification. | (Required unless disabled) |
+| `OPENCODE_PLUGIN_RETRY_CLASSIFIER_API_KEY` | API key for the classifier endpoint. | (Required unless disabled) |
 
 ### Replay Server Authentication
 

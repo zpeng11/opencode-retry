@@ -12,16 +12,9 @@ describe("config parsing", () => {
     process.env = originalEnv
   })
 
-  test("disabled plugin returns minimal config", () => {
+  test("default config enables the plugin and requires classifier settings", () => {
     delete process.env.OPENCODE_PLUGIN_RETRY_ENABLED
-    const config = loadConfig()
-
-    expect(config.enabled).toBe(false)
-    expect(config.classifierTimeoutMs).toBe(5000)
-    expect(config.maxRetries).toBe(2)
-    expect(config.classifierEndpoint).toBeUndefined()
-    expect(config.classifierModel).toBeUndefined()
-    expect(config.classifierApiKey).toBeUndefined()
+    expect(() => loadConfig()).toThrow("OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT is required")
   })
 
   test("enabled=false returns minimal config even if classifier fields exist", () => {
@@ -36,8 +29,8 @@ describe("config parsing", () => {
     expect(config.classifierEndpoint).toBeUndefined()
   })
 
-  test("enabled=true with all required fields parses successfully", () => {
-    process.env.OPENCODE_PLUGIN_RETRY_ENABLED = "true"
+  test("default-enabled plugin parses successfully with all required fields", () => {
+    delete process.env.OPENCODE_PLUGIN_RETRY_ENABLED
     process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT = "https://api.example.com/chat"
     process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_MODEL = "claude-3.5-sonnet"
     process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_API_KEY = "sk-key-12345"
@@ -50,8 +43,8 @@ describe("config parsing", () => {
     expect(config.classifierApiKey).toBe("sk-key-12345")
   })
 
-  test("enabled=true without endpoint throws error", () => {
-    process.env.OPENCODE_PLUGIN_RETRY_ENABLED = "true"
+  test("default-enabled plugin without endpoint throws error", () => {
+    delete process.env.OPENCODE_PLUGIN_RETRY_ENABLED
     delete process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT
     process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_MODEL = "gpt-4o-mini"
     process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_API_KEY = "sk-key"
@@ -59,8 +52,8 @@ describe("config parsing", () => {
     expect(() => loadConfig()).toThrow("OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT is required")
   })
 
-  test("enabled=true without model throws error", () => {
-    process.env.OPENCODE_PLUGIN_RETRY_ENABLED = "true"
+  test("default-enabled plugin without model throws error", () => {
+    delete process.env.OPENCODE_PLUGIN_RETRY_ENABLED
     process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT = "https://api.example.com/chat"
     delete process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_MODEL
     process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_API_KEY = "sk-key"
@@ -68,8 +61,8 @@ describe("config parsing", () => {
     expect(() => loadConfig()).toThrow("OPENCODE_PLUGIN_RETRY_CLASSIFIER_MODEL is required")
   })
 
-  test("enabled=true without api key throws error", () => {
-    process.env.OPENCODE_PLUGIN_RETRY_ENABLED = "true"
+  test("default-enabled plugin without api key throws error", () => {
+    delete process.env.OPENCODE_PLUGIN_RETRY_ENABLED
     process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT = "https://api.example.com/chat"
     process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_MODEL = "gpt-4o-mini"
     delete process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_API_KEY

@@ -1,8 +1,19 @@
-import { describe, test, expect } from "bun:test"
+import { afterEach, beforeEach, describe, test, expect } from "bun:test"
 import type { PluginInput } from "@opencode-ai/plugin"
 import StarterPlugin from "../src/index.js"
 
 describe("baseline package", () => {
+  const originalEnv = { ...process.env }
+
+  beforeEach(() => {
+    process.env = { ...originalEnv }
+    process.env.OPENCODE_PLUGIN_RETRY_ENABLED = "false"
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+  })
+
   test("exports StarterPlugin as default", async () => {
     expect(StarterPlugin).toBeDefined()
     expect(typeof StarterPlugin).toBe("function")
@@ -15,4 +26,3 @@ describe("baseline package", () => {
     expect(typeof result).toBe("object")
   })
 })
-
