@@ -117,6 +117,11 @@ export function createTruncationRetryHooks(
       result.outcome === "escalated" ||
       (result.outcome === "ignored" &&
         (result.reason === "normal-turn" ||
+          result.reason === "assistant-aborted" ||
+          result.reason === "assistant-auth-error" ||
+          result.reason === "assistant-context-overflow" ||
+          result.reason === "assistant-api-error" ||
+          result.reason === "assistant-error" ||
           result.reason === "structured-output-complete" ||
           result.reason === "structured-output-error"))
     )

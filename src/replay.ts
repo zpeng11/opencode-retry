@@ -85,6 +85,11 @@ export interface AttemptSafeReplayTransactionInput {
 
 export type ReplayIgnoredReason =
   | "already-escalated"
+  | "assistant-aborted"
+  | "assistant-api-error"
+  | "assistant-auth-error"
+  | "assistant-context-overflow"
+  | "assistant-error"
   | "busy-session"
   | "client-read-failed"
   | "missing-assistant-message"
@@ -112,6 +117,13 @@ interface SessionStatusLike {
   type?: string
 }
 
+type FinishErrorIgnoredReason =
+  | "assistant-aborted"
+  | "assistant-api-error"
+  | "assistant-auth-error"
+  | "assistant-context-overflow"
+  | "assistant-error"
+
 function cloneValue<T>(value: T): T {
   return structuredClone(value)
 }
@@ -135,6 +147,11 @@ function normalizeOptionalString(value: unknown): string | undefined {
 
 function isActiveSessionStatus(status: SessionStatusLike | undefined): boolean {
   return status?.type === "busy" || status?.type === "retry"
+}
+
+function isBusySessionError(error: unknown, sessionID: string): boolean {
+  const message = normalizeOptionalString(asRecord(error)?.message)
+  return message === `Session ${sessionID} is busy`
 }
 
 function isAssistantMessage(info: unknown): info is AssistantMessageLike {
@@ -175,6 +192,23 @@ function hasStructuredOutputResult(message: SessionMessageHistory[number]): bool
 
 function isStructuredOutputError(error: unknown): boolean {
   return normalizeOptionalString(asRecord(error)?.name) === "StructuredOutputError"
+}
+
+function getFinishErrorIgnoredReason(error: unknown): FinishErrorIgnoredReason {
+  const name = normalizeOptionalString(asRecord(error)?.name)
+
+  switch (name) {
+    case "MessageAbortedError":
+      return "assistant-aborted"
+    case "ProviderAuthError":
+      return "assistant-auth-error"
+    case "ContextOverflowError":
+      return "assistant-context-overflow"
+    case "APIError":
+      return "assistant-api-error"
+    default:
+      return "assistant-error"
+  }
 }
 
 function getFinishReason(message: SessionMessageHistory[number]): string | undefined {
@@ -237,6 +271,41 @@ interface TurnReplayDisposition {
 async function getCurrentStatus(client: ReplayTransactionClient, sessionID: string): Promise<SessionStatusLike | undefined> {
   const response = await client.session?.status?.()
   return getSessionStatusForID(response?.data, sessionID)
+}
+
+async function handleRevertFailureForReplay(input: {
+  client: ReplayTransactionClient
+  tracker: SessionTracker
+  sessionID: string
+  generation: number
+  error: unknown
+}): Promise<ReplayTransactionResult> {
+  const current = input.tracker.getSession(input.sessionID)
+  if (!current) {
+    return { outcome: "ignored", reason: "missing-session" }
+  }
+
+  if (current.generation !== input.generation) {
+    return { outcome: "ignored", reason: "stale-generation" }
+  }
+
+  const statusAfterFailure = await getCurrentStatus(input.client, input.sessionID).catch(() => undefined)
+  if (isBusySessionError(input.error, input.sessionID) || isActiveSessionStatus(statusAfterFailure)) {
+    input.tracker.clearPendingIdleForGeneration({
+      sessionID: input.sessionID,
+      generation: input.generation,
+    })
+    return { outcome: "ignored", reason: "busy-session" }
+  }
+
+  await escalateToUserJudgment({
+    client: input.client,
+    tracker: input.tracker,
+    sessionID: input.sessionID,
+    generation: input.generation,
+    reason: "replay-revert-failed",
+  })
+  return { outcome: "escalated", reason: "replay-revert-failed" }
 }
 
 export async function listSessionMessages(
@@ -316,6 +385,13 @@ async function classifyTurnForReplay(input: {
 
   if (detection.decision === ClassifierResult.TRUNCATED) {
     return { action: "retry" }
+  }
+
+  if (finishError) {
+    return {
+      action: "ignore",
+      reason: getFinishErrorIgnoredReason(finishError),
+    }
   }
 
   const classifier = await classifyWithSmallModel({
@@ -508,10 +584,20 @@ export async function attemptSafeReplayTransaction(
     return { outcome: "ignored", reason: "stale-generation" }
   }
 
-  await input.client.session?.revert?.({
-    path: { id: input.sessionID },
-    body: { messageID: replayEnvelope.rootMessageID },
-  })
+  try {
+    await input.client.session?.revert?.({
+      path: { id: input.sessionID },
+      body: { messageID: replayEnvelope.rootMessageID },
+    })
+  } catch (error) {
+    return handleRevertFailureForReplay({
+      client: input.client,
+      tracker: input.tracker,
+      sessionID: input.sessionID,
+      generation: input.generation,
+      error,
+    })
+  }
 
   const currentBeforeReplay = input.tracker.getSession(input.sessionID)
   if (!currentBeforeReplay || currentBeforeReplay.generation !== input.generation) {

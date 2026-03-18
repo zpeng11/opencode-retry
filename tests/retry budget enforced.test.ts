@@ -69,7 +69,7 @@ function createTruncatedHistory(replayEnvelope: ReplayEnvelope) {
 }
 
 describe("retry budget enforced", () => {
-  test("a new turn starts with a fresh retry budget", async () => {
+  test("escalates when a turn exhausts its budget and resets on the next turn", async () => {
     const sessionID = "session-retry-budget"
     const rootMessageID = "root-retry-budget"
     const tracker = createSessionTracker()
@@ -131,8 +131,46 @@ describe("retry budget enforced", () => {
       }),
     })
 
-    const secondTurn = tracker.startTurn({ sessionID, replayEnvelope })
     const secondResult = await attemptSafeReplayTransaction({
+      client,
+      tracker,
+      config: createEnabledConfig(),
+      sessionID,
+      generation: firstTurn.generation,
+      recentToolOutcomes: [],
+      directory: "/tmp/opencode-retry",
+      serverUrl: new URL("https://example.com"),
+      replayClientFactory: () => ({
+        session: {
+          async prompt(input) {
+            promptCalls.push({ sessionID: input.sessionID, messageID: input.messageID })
+            return { data: true }
+          },
+        },
+      }),
+    })
+
+    const exhaustedResult = await attemptSafeReplayTransaction({
+      client,
+      tracker,
+      config: createEnabledConfig(),
+      sessionID,
+      generation: firstTurn.generation,
+      recentToolOutcomes: [],
+      directory: "/tmp/opencode-retry",
+      serverUrl: new URL("https://example.com"),
+      replayClientFactory: () => ({
+        session: {
+          async prompt(input) {
+            promptCalls.push({ sessionID: input.sessionID, messageID: input.messageID })
+            return { data: true }
+          },
+        },
+      }),
+    })
+
+    const secondTurn = tracker.startTurn({ sessionID, replayEnvelope })
+    const resetTurnResult = await attemptSafeReplayTransaction({
       client,
       tracker,
       config: createEnabledConfig(),
@@ -151,30 +189,11 @@ describe("retry budget enforced", () => {
       }),
     })
 
-    const thirdTurn = tracker.startTurn({ sessionID, replayEnvelope })
-    const thirdResult = await attemptSafeReplayTransaction({
-      client,
-      tracker,
-      config: createEnabledConfig(),
-      sessionID,
-      generation: thirdTurn.generation,
-      recentToolOutcomes: [],
-      directory: "/tmp/opencode-retry",
-      serverUrl: new URL("https://example.com"),
-      replayClientFactory: () => ({
-        session: {
-          async prompt(input) {
-            promptCalls.push({ sessionID: input.sessionID, messageID: input.messageID })
-            return { data: true }
-          },
-        },
-      }),
-    })
-
     expect(firstResult).toEqual({ outcome: "replayed", retryCount: 1 })
-    expect(secondResult).toEqual({ outcome: "replayed", retryCount: 1 })
-    expect(thirdTurn.retryCount).toBe(0)
-    expect(thirdResult).toEqual({ outcome: "replayed", retryCount: 1 })
+    expect(secondResult).toEqual({ outcome: "replayed", retryCount: 2 })
+    expect(exhaustedResult).toEqual({ outcome: "escalated", reason: "retry-budget-exhausted" })
+    expect(secondTurn.retryCount).toBe(0)
+    expect(resetTurnResult).toEqual({ outcome: "replayed", retryCount: 1 })
     expect(revertCalls).toEqual([
       {
         path: { id: sessionID },
@@ -196,7 +215,8 @@ describe("retry budget enforced", () => {
     ])
     expect(tracker.getSession(sessionID)?.retryCount).toBe(1)
     expect(tracker.getSession(sessionID)?.isEscalated).toBe(false)
-    expect(toastCalls).toEqual([])
-    expect(appendPromptCalls).toEqual([])
+    expect(toastCalls).toHaveLength(1)
+    expect(toastCalls[0]?.body?.variant).toBe("warning")
+    expect(appendPromptCalls).toHaveLength(1)
   })
 })

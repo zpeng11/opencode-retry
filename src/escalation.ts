@@ -5,6 +5,7 @@ export type JudgmentEscalationReason =
   | "maybe-truncated-needs-judgment"
   | "missing-replay-envelope"
   | "replay-bootstrap-failed"
+  | "replay-revert-failed"
   | "replay-submit-failed"
   | "replay-rollback-failed"
   | "retry-budget-exhausted"
@@ -57,6 +58,11 @@ function getEscalationCopy(reason: JudgmentEscalationReason): EscalationCopy {
       return {
         promptText: ESCALATION_PROMPT,
         toastMessage: "Automatic retries stopped. Review the previous turn.",
+      }
+    case "replay-revert-failed":
+      return {
+        promptText: ESCALATION_PROMPT,
+        toastMessage: "Automatic retry failed while reverting the previous turn. Review the session state carefully.",
       }
     case "replay-submit-failed":
       return {

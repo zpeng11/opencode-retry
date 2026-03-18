@@ -9,7 +9,6 @@ describe("patch parts unsafe", () => {
       files: ["src/side-effects.ts"],
     })
 
-    expect(assessment).toBeDefined()
     expect(assessment?.classification).toBe("mutating")
     expect(assessment?.blocksAutoRetry).toBe(true)
     expect(assessment?.reason).toBe("patch-part")
@@ -25,7 +24,6 @@ describe("patch parts unsafe", () => {
       },
     })
 
-    expect(assessment).toBeDefined()
     expect(assessment?.classification).toBe("unsafe-unknown")
     expect(assessment?.blocksAutoRetry).toBe(true)
     expect(assessment?.reason).toBe("tool-error")

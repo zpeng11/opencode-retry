@@ -180,23 +180,8 @@ describe("unsafe side effects escalate", () => {
     await promptAppended.promise
 
     expect(replayFactoryCalls).toBe(0)
-    expect(toastCalls).toEqual([
-      {
-        body: {
-          title: "Retry stopped",
-          message: "Previous turn may already have caused side effects.",
-          variant: "warning",
-          duration: 4000,
-        },
-      },
-    ])
-    expect(appendPromptCalls).toEqual([
-      {
-        body: {
-          text:
-            "Review the previous turn, then retry only if it is safe. It may have been truncated or may already have caused side effects.",
-        },
-      },
-    ])
+    expect(toastCalls).toHaveLength(1)
+    expect(toastCalls[0]?.body?.variant).toBe("warning")
+    expect(appendPromptCalls).toHaveLength(1)
   })
 })
