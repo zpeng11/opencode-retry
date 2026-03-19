@@ -6,7 +6,14 @@ import { buildClassifierPayload, detectTruncation, type DetectorToolOutcome } fr
 import { escalateToUserJudgment, type JudgmentEscalationReason } from "./escalation.js"
 import { assessSideEffects } from "./side-effects.js"
 import type { SessionTracker } from "./tracker.js"
-import { ClassifierResult, type PluginConfig, type ReplayEnvelope, type ReplayFormat, type ReplayModel } from "./types.js"
+import {
+  ClassifierResult,
+  type PluginConfig,
+  type ReplayEnvelope,
+  type ReplayFormat,
+  type ReplayModel,
+  type ResolvedClassifierConfig,
+} from "./types.js"
 
 export type SessionMessageHistory = Array<{
   info: Message
@@ -69,11 +76,19 @@ export interface ReplaySubmissionClientFactoryInput {
 }
 
 export type ReplaySubmissionClientFactory = (input: ReplaySubmissionClientFactoryInput) => ReplaySubmissionClient
+export interface ResolveClassifierConfigInput {
+  replayModel?: ReplayModel
+}
+
+export type ClassifierConfigResolver = (
+  input: ResolveClassifierConfigInput,
+) => Promise<ResolvedClassifierConfig | undefined>
 
 export interface AttemptSafeReplayTransactionInput {
   client: ReplayTransactionClient
   tracker: SessionTracker
   config: PluginConfig
+  resolveClassifierConfig?: ClassifierConfigResolver
   sessionID: string
   generation: number
   prefetchedMessages?: SessionMessageHistory
@@ -349,6 +364,7 @@ export const createDefaultReplayClientFactory: ReplaySubmissionClientFactory = (
 
 async function classifyTurnForReplay(input: {
   config: PluginConfig
+  resolveClassifierConfig?: ClassifierConfigResolver
   replayEnvelope: ReplayEnvelope
   lastAssistantMessage: SessionMessageHistory[number]
   recentToolOutcomes?: readonly DetectorToolOutcome[]
@@ -394,8 +410,20 @@ async function classifyTurnForReplay(input: {
     }
   }
 
+  const classifierConfig = input.resolveClassifierConfig
+    ? await input.resolveClassifierConfig({
+        replayModel: toReplayModel(input.replayEnvelope.model),
+      })
+    : undefined
+  if (!classifierConfig) {
+    return {
+      action: "escalate",
+      reason: "maybe-truncated-needs-judgment",
+    }
+  }
+
   const classifier = await classifyWithSmallModel({
-    config: input.config,
+    config: classifierConfig,
     payload: buildClassifierPayload({
       replayEnvelope: input.replayEnvelope,
       lastAssistantText,
@@ -488,6 +516,7 @@ export async function attemptSafeReplayTransaction(
 
   const turnDisposition = await classifyTurnForReplay({
     config: input.config,
+    resolveClassifierConfig: input.resolveClassifierConfig,
     replayEnvelope,
     lastAssistantMessage,
     recentToolOutcomes: input.recentToolOutcomes,

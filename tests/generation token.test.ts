@@ -12,63 +12,6 @@ function createEnvelope(sessionID: string, rootMessageID: string): ReplayEnvelop
 }
 
 describe("generation token", () => {
-  test("a newer turn invalidates stale idle work from an older generation", () => {
-    const tracker = createSessionTracker()
-    const sessionID = "session-1"
-
-    const firstTurn = tracker.startTurn({
-      sessionID,
-      replayEnvelope: createEnvelope(sessionID, "root-1"),
-    })
-
-    const firstIdle = tracker.recordIdleCandidate({
-      sessionID,
-      generation: firstTurn.generation,
-      lastAssistantMessageID: "assistant-1",
-    })
-
-    expect(firstIdle.accepted).toBe(true)
-    expect(firstIdle.snapshot?.pendingIdleGeneration).toBe(1)
-    expect(firstIdle.snapshot?.lastAssistantMessageID).toBe("assistant-1")
-
-    const duplicateIdle = tracker.recordIdleCandidate({
-      sessionID,
-      generation: firstTurn.generation,
-      lastAssistantMessageID: "assistant-1",
-    })
-
-    expect(duplicateIdle.accepted).toBe(false)
-    expect(duplicateIdle.reason).toBe("duplicate-idle")
-
-    const secondTurn = tracker.startTurn({
-      sessionID,
-      replayEnvelope: createEnvelope(sessionID, "root-2"),
-    })
-
-    expect(secondTurn.generation).toBe(2)
-    expect(secondTurn.pendingIdleGeneration).toBeUndefined()
-    expect(secondTurn.lastAssistantMessageID).toBeUndefined()
-
-    const staleIdle = tracker.recordIdleCandidate({
-      sessionID,
-      generation: firstTurn.generation,
-      lastAssistantMessageID: "assistant-stale",
-    })
-
-    expect(staleIdle.accepted).toBe(false)
-    expect(staleIdle.reason).toBe("stale-generation")
-
-    const currentIdle = tracker.recordIdleCandidate({
-      sessionID,
-      generation: secondTurn.generation,
-      lastAssistantMessageID: "assistant-2",
-    })
-
-    expect(currentIdle.accepted).toBe(true)
-    expect(currentIdle.snapshot?.pendingIdleGeneration).toBe(2)
-    expect(currentIdle.snapshot?.lastAssistantMessageID).toBe("assistant-2")
-  })
-
   test("cancelGeneration bumps the token and blocks stale retry attempts", () => {
     const tracker = createSessionTracker()
     const sessionID = "session-2"

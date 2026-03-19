@@ -8,9 +8,6 @@ import type { PluginConfig, ReplayEnvelope, ReplayModel } from "../src/types.js"
 function createEnabledConfig(): PluginConfig {
   return {
     enabled: true,
-    classifierEndpoint: "https://example.com/v1/chat/completions",
-    classifierModel: "gpt-4o-mini",
-    classifierApiKey: "test-key",
     classifierTimeoutMs: 500,
     maxRetries: 2,
   }

@@ -1,14 +1,9 @@
 import { CLASSIFIER_SYSTEM_PROMPT } from "./config.js"
 import { ClassifierResult } from "./types.js"
-import type { ClassifierPayload, PluginConfig } from "./types.js"
+import type { ClassifierPayload, ResolvedClassifierConfig } from "./types.js"
 
 const MAX_FAILURE_CHARS = 240
 const VALID_RESULTS = new Set<string>(Object.values(ClassifierResult))
-
-type ClassifierConfig = Pick<
-  PluginConfig,
-  "classifierEndpoint" | "classifierModel" | "classifierApiKey" | "classifierTimeoutMs"
->
 
 export interface ClassifierCallResult {
   result: ClassifierResult
@@ -131,7 +126,7 @@ function createRequestBody(model: string, payload: ClassifierPayload) {
 }
 
 export async function classifyWithSmallModel(input: {
-  config: ClassifierConfig
+  config: ResolvedClassifierConfig
   payload: ClassifierPayload
   fetch?: typeof fetch
   signal?: AbortSignal

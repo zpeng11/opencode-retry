@@ -1,10 +1,12 @@
-import type { UserMessage } from "@opencode-ai/sdk"
+import type { Config as HostConfig, Provider as HostProvider, UserMessage } from "@opencode-ai/sdk"
 import type { Hooks, Plugin, PluginInput } from "@opencode-ai/plugin"
 
+import { resolveHostClassifierConfig } from "./classifier-config.js"
 import { loadConfig } from "./config.js"
 import { MAX_RECENT_TOOL_OUTCOMES, type DetectorToolOutcome } from "./detector.js"
 import {
   attemptSafeReplayTransaction,
+  type ClassifierConfigResolver,
   listSessionMessages,
   type ReplayTransactionResult,
   type ReplaySubmissionClientFactory,
@@ -51,6 +53,19 @@ function createRuntimeSessionState(): RuntimeSessionState {
   }
 }
 
+function toHostProviders(value: unknown): HostProvider[] | undefined {
+  const record = asRecord(value)
+  if (Array.isArray(record?.providers)) {
+    return cloneValue(record.providers as HostProvider[])
+  }
+
+  if (Array.isArray(value)) {
+    return cloneValue(value as HostProvider[])
+  }
+
+  return undefined
+}
+
 function resetRuntimeSessionState(state: RuntimeSessionState): void {
   state.recentToolOutcomes = []
 }
@@ -94,6 +109,22 @@ export function createTruncationRetryHooks(
   const tracker = createSessionTracker()
   const sessionState = new Map<string, RuntimeSessionState>()
   const idleQueue = new Map<string, Promise<void>>()
+  let hostConfigSeed: HostConfig | undefined
+
+  const resolveClassifierConfig: ClassifierConfigResolver = async (classifierInput) => {
+    if (!hostConfigSeed) {
+      return undefined
+    }
+
+    const hostProviders = await input.client.config.providers().then((response) => toHostProviders(response?.data))
+
+    return resolveHostClassifierConfig({
+      hostConfig: hostConfigSeed,
+      providers: hostProviders,
+      classifierTimeoutMs: config.classifierTimeoutMs,
+      replayModel: classifierInput.replayModel,
+    })
+  }
 
   function getOrCreateRuntimeSession(sessionID: string): RuntimeSessionState {
     const existing = sessionState.get(sessionID)
@@ -159,6 +190,7 @@ export function createTruncationRetryHooks(
       client: input.client,
       tracker,
       config,
+      resolveClassifierConfig,
       sessionID: snapshot.sessionID,
       generation: snapshot.generation,
       prefetchedMessages,
@@ -189,6 +221,10 @@ export function createTruncationRetryHooks(
   }
 
   return {
+    async config(hostConfig) {
+      hostConfigSeed = cloneValue(hostConfig)
+    },
+
     async "chat.message"(hookInput, hookOutput) {
       if (!config.enabled) {
         return

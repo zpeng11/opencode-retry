@@ -12,7 +12,7 @@ This plugin automatically detects and retries truncated assistant responses in O
 ## How it Works
 
 1. **Detection**: On every assistant turn, the plugin checks the `finishReason` and content.
-2. **Classification**: If the turn looks suspicious, it calls a configured small model (e.g., via an OpenAI-compatible endpoint) to judge if it was truncated.
+2. **Classification**: If the turn looks suspicious, it resolves a classifier model from the host OpenCode provider/model configuration and calls it through an OpenAI-compatible endpoint.
 3. **Safety Check**: Before retrying, the plugin inspects the turn for side effects (like tool calls). Turns with side effects are never auto-retried.
 4. **Execution**: If safe, the plugin reverts the last message and resubmits the prompt.
 5. **Escalation**: For ambiguous cases or failures, it uses `tui.showToast()` and `tui.appendPrompt()` to notify the user and request manual review.
@@ -27,13 +27,17 @@ This plugin automatically detects and retries truncated assistant responses in O
 | `OPENCODE_PLUGIN_RETRY_MAX_RETRIES` | Max auto-retries per root user prompt (capped at 2). | `2` |
 | `OPENCODE_PLUGIN_RETRY_CLASSIFIER_TIMEOUT_MS` | Timeout for the classifier request. | `5000` |
 
-### Classifier Endpoint
+### Classifier Model Resolution
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT` | OpenAI-compatible API endpoint for the classifier. | (Required unless disabled) |
-| `OPENCODE_PLUGIN_RETRY_CLASSIFIER_MODEL` | Model ID to use for classification. | (Required unless disabled) |
-| `OPENCODE_PLUGIN_RETRY_CLASSIFIER_API_KEY` | API key for the classifier endpoint. | (Required unless disabled) |
+When the plugin needs a classifier model, it resolves configuration in this order:
+
+1. Host `small_model`
+2. A cheaper inferred small model from the host `model` provider when available
+3. Host `model`
+4. A cheaper inferred small model from the current replay model provider when the host model is unset
+5. The current replay model
+
+Host inheritance currently supports OpenAI-compatible providers only. The selected provider must expose an API key and a base URL (or model API URL) that can be normalized to a `/chat/completions` endpoint.
 
 ### Replay Server Authentication
 

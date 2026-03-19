@@ -18,28 +18,29 @@ export enum ClassifierResult {
 }
 
 /**
- * Runtime configuration for the plugin, parsed from environment variables.
- * Fail-fast on invalid/incomplete config when classification is enabled.
+ * Runtime plugin policy configuration, parsed from environment variables.
+ * Model/provider selection for the classifier is inherited from the host.
  */
 export interface PluginConfig {
   /** Whether the truncation retry plugin is enabled. Defaults to true unless explicitly set to false. */
-  enabled: boolean;
-
-  /** OpenAI-compatible classifier endpoint (e.g., https://api.openai.com/v1/chat/completions). */
-  classifierEndpoint?: string;
-
-  /** Classifier model name (e.g., gpt-4o-mini, claude-3.5-sonnet). */
-  classifierModel?: string;
-
-  /** API key for the classifier service. */
-  classifierApiKey?: string;
+  enabled: boolean
 
   /** Classifier request timeout in milliseconds. Defaults to 5000. */
-  classifierTimeoutMs: number;
+  classifierTimeoutMs: number
 
   /** Maximum automatic retries per root user prompt. Defaults to 2. Clamped to [0, 2]. */
-  maxRetries: number;
+  maxRetries: number
+}
 
+/**
+ * Fully resolved classifier request configuration ready to be used for an
+ * OpenAI-compatible chat completion request.
+ */
+export interface ResolvedClassifierConfig {
+  classifierEndpoint: string
+  classifierModel: string
+  classifierApiKey: string
+  classifierTimeoutMs: number
 }
 
 /**

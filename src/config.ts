@@ -1,9 +1,9 @@
 import type { PluginConfig } from "./types.js"
-import { ClassifierResult } from "./types.js"
 
 /**
  * Parse and validate plugin configuration from environment variables.
- * Fail loudly if classification is configured but required fields are missing.
+ * Classifier model selection is inherited entirely from the host application's
+ * configured model/provider state.
  */
 export function loadConfig(): PluginConfig {
   const enabled = process.env.OPENCODE_PLUGIN_RETRY_ENABLED !== "false"
@@ -15,27 +15,6 @@ export function loadConfig(): PluginConfig {
       classifierTimeoutMs: 5000,
       maxRetries: 2,
     }
-  }
-
-  // Classification is enabled; all required fields must be present
-  const endpoint = process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT
-  const model = process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_MODEL
-  const apiKey = process.env.OPENCODE_PLUGIN_RETRY_CLASSIFIER_API_KEY
-
-  if (!endpoint) {
-    throw new Error(
-      "OPENCODE_PLUGIN_RETRY_CLASSIFIER_ENDPOINT is required unless OPENCODE_PLUGIN_RETRY_ENABLED=false"
-    )
-  }
-  if (!model) {
-    throw new Error(
-      "OPENCODE_PLUGIN_RETRY_CLASSIFIER_MODEL is required unless OPENCODE_PLUGIN_RETRY_ENABLED=false"
-    )
-  }
-  if (!apiKey) {
-    throw new Error(
-      "OPENCODE_PLUGIN_RETRY_CLASSIFIER_API_KEY is required unless OPENCODE_PLUGIN_RETRY_ENABLED=false"
-    )
   }
 
   // Parse optional fields with defaults
@@ -63,9 +42,6 @@ export function loadConfig(): PluginConfig {
 
   return {
     enabled: true,
-    classifierEndpoint: endpoint,
-    classifierModel: model,
-    classifierApiKey: apiKey,
     classifierTimeoutMs: timeoutMs,
     maxRetries,
   }

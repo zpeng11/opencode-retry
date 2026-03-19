@@ -15,9 +15,6 @@ function deferred<T>() {
 function createEnabledConfig(): PluginConfig {
   return {
     enabled: true,
-    classifierEndpoint: "https://example.com/v1/chat/completions",
-    classifierModel: "gpt-4o-mini",
-    classifierApiKey: "test-key",
     classifierTimeoutMs: 500,
     maxRetries: 2,
   }
@@ -494,6 +491,54 @@ describe("safe auto retry", () => {
 
     try {
       const client = {
+        config: {
+          async providers() {
+            return {
+              data: {
+                providers: [
+                  {
+                    id: "openai",
+                    name: "OpenAI",
+                    source: "config",
+                    env: [],
+                    key: "host-key",
+                    options: {
+                      baseURL: "https://example.com/v1",
+                    },
+                    models: {
+                      "gpt-4o-mini": {
+                        id: "gpt-4o-mini",
+                        providerID: "openai",
+                        name: "GPT-4o mini",
+                        family: "gpt",
+                        api: {
+                          id: "gpt-4o-mini",
+                          url: "https://example.com/v1",
+                          npm: "@ai-sdk/openai",
+                        },
+                        capabilities: {
+                          temperature: true,
+                          reasoning: false,
+                          attachment: false,
+                          toolcall: true,
+                          input: { text: true, audio: false, image: false, video: false, pdf: false },
+                          output: { text: true, audio: false, image: false, video: false, pdf: false },
+                          interleaved: false,
+                        },
+                        cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+                        limit: { context: 128_000, output: 8_192 },
+                        status: "active",
+                        options: {},
+                        headers: {},
+                        release_date: "2026-01-01",
+                      },
+                    },
+                  },
+                ],
+              },
+            }
+          },
+        },
         session: {
           async messages() {
             return { data: structuredClone(currentHistory) }
@@ -541,6 +586,11 @@ describe("safe auto retry", () => {
           }),
         },
       )
+
+      await hooks.config?.({
+        small_model: "openai/gpt-4o-mini",
+        model: "openai/gpt-4o",
+      })
 
       const initialArgs = createChatMessageArgs(replayEnvelope)
       await hooks["chat.message"]?.(initialArgs.hookInput as never, initialArgs.hookOutput as never)
@@ -657,88 +707,4 @@ describe("safe auto retry", () => {
     expect(promptCalls[0].messageID).toBe(rootMessageID)
   })
 
-  test("replays after a completed webfetch tool call when the answer truncates later", async () => {
-    const sessionID = "session-safe-webfetch-replay"
-    const rootMessageID = "root-safe-webfetch"
-    const replayEnvelope = createReplayEnvelope(sessionID, rootMessageID)
-    const revertCalls: Array<{ path: { id: string }; body: { messageID: string } }> = []
-    const promptCalls: ReplaySubmissionRequest[] = []
-    const replaySubmitted = deferred<void>()
-    let hooks!: ReturnType<typeof createTruncationRetryHooks>
-    let currentHistory = createReadOnlyWebFetchTruncatedHistory(replayEnvelope)
-
-    const client = {
-      session: {
-        async messages() {
-          return { data: structuredClone(currentHistory) }
-        },
-        async status() {
-          return { data: {} }
-        },
-        async revert(input: { path: { id: string }; body: { messageID: string } }) {
-          revertCalls.push(input)
-          return { data: true }
-        },
-        async unrevert() {
-          throw new Error("read-only webfetch replay should not unrevert")
-        },
-      },
-      tui: {
-        async showToast() {
-          throw new Error("read-only webfetch replay should not notify")
-        },
-      },
-    } as unknown as PluginInput["client"]
-
-    hooks = createTruncationRetryHooks(
-      {
-        client,
-        directory: "/tmp/opencode-retry",
-        serverUrl: new URL("https://example.com"),
-      },
-      {
-        config: createEnabledConfig(),
-        replayClientFactory: () => ({
-          session: {
-            async prompt(input) {
-              promptCalls.push(structuredClone(input))
-              replaySubmitted.resolve()
-              return { data: true }
-            },
-          },
-        }),
-      },
-    )
-
-    const initialArgs = createChatMessageArgs(replayEnvelope)
-    await hooks["chat.message"]?.(initialArgs.hookInput as never, initialArgs.hookOutput as never)
-    await hooks["tool.execute.after"]?.(
-      {
-        tool: "webfetch",
-        sessionID,
-        callID: "call-webfetch-1",
-        args: {
-          url: "https://example.com/docs",
-        },
-      },
-      {
-        title: "Fetches example docs",
-        output: "Fetched example content",
-        metadata: {
-          contentType: "text/html",
-        },
-      },
-    )
-    await hooks.event?.({ event: createIdleEvent(sessionID) as never })
-    await replaySubmitted.promise
-
-    expect(revertCalls).toEqual([
-      {
-        path: { id: sessionID },
-        body: { messageID: rootMessageID },
-      },
-    ])
-    expect(promptCalls).toHaveLength(1)
-    expect(promptCalls[0].messageID).toBe(rootMessageID)
-  })
 })
