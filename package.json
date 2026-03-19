@@ -5,7 +5,7 @@
   "private": true,
   "description": "Starter repository for building OpenCode plugins with TypeScript",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
