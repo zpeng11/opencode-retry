@@ -220,14 +220,6 @@ describe("host classifier inheritance", () => {
             throw new Error("host-inherited replay should not unrevert")
           },
         },
-        tui: {
-          async showToast() {
-            throw new Error("host-inherited replay should not notify")
-          },
-          async appendPrompt() {
-            throw new Error("host-inherited replay should not append prompt")
-          },
-        },
       } as unknown as PluginInput["client"]
 
       hooks = createTruncationRetryHooks(

@@ -15,7 +15,7 @@ This plugin automatically detects and retries truncated assistant responses in O
 2. **Classification**: If the turn looks suspicious, it resolves a classifier model from the host OpenCode provider/model configuration and calls it through an OpenAI-compatible endpoint.
 3. **Safety Check**: Before retrying, the plugin inspects the turn for side effects (like tool calls). Turns with side effects are never auto-retried.
 4. **Execution**: If safe, the plugin reverts the last message and resubmits the prompt.
-5. **Escalation**: For ambiguous cases or failures, it uses `tui.showToast()` and `tui.appendPrompt()` to notify the user and request manual review.
+5. **Escalation**: For ambiguous cases or failures, it appends a user-only warning to the latest assistant text in the session transcript when possible, and strips that warning from future model context.
 
 ## Configuration
 
@@ -95,6 +95,6 @@ npm pack --dry-run # Verify packaging metadata
 
 ## Limitations
 
-- **User Judgment**: The plugin cannot create new user questions/modals due to API limitations. It uses toasts and prompt appending for escalation.
+- **User Judgment**: The plugin cannot create brand-new custom transcript widgets or question modals from the plugin API alone. It patches the latest assistant text when possible.
 - **Truncation Accuracy**: Detection is heuristic and depends on the classifier model's quality.
 - **Side Effects**: Only simple text turns are auto-retried; any turn with completed tool calls is considered unsafe.

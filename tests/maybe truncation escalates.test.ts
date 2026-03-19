@@ -123,11 +123,8 @@ describe("maybe truncation escalates", () => {
     const sessionID = "session-maybe"
     const rootMessageID = "root-maybe"
     const replayEnvelope = createReplayEnvelope(sessionID, rootMessageID)
-    const promptAppended = deferred<void>()
-    const toastCalls: Array<{
-      body?: { title?: string; message: string; variant: string; duration?: number }
-    }> = []
-    const appendPromptCalls: Array<{ body?: { text: string } }> = []
+    const warningWritten = deferred<void>()
+    const partUpdateCalls: Array<{ messageID: string; partID: string; part?: unknown }> = []
     let replayFactoryCalls = 0
 
     globalThis.fetch = async () =>
@@ -162,23 +159,21 @@ describe("maybe truncation escalates", () => {
                 throw new Error("ambiguous turn should not revert")
               },
             },
-            tui: {
-              async showToast(input: {
-                body?: { title?: string; message: string; variant: string; duration?: number }
-              }) {
-                toastCalls.push(input)
-                return { data: true }
-              },
-              async appendPrompt(input: { body?: { text: string } }) {
-                appendPromptCalls.push(input)
-                promptAppended.resolve()
-                return { data: true }
-              },
-            },
           } as unknown as PluginInput["client"],
+          directory: "/tmp/opencode-retry",
+          serverUrl: new URL("https://example.com"),
         },
         {
           config: createEnabledConfig(),
+          escalationWarningClientFactory: () => ({
+            part: {
+              async update(input: { messageID: string; partID: string; part?: unknown }) {
+                partUpdateCalls.push(input)
+                warningWritten.resolve()
+                return { data: true }
+              },
+            },
+          }),
           replayClientFactory: () => {
             replayFactoryCalls += 1
             return {
@@ -195,12 +190,14 @@ describe("maybe truncation escalates", () => {
       const args = createChatMessageArgs(replayEnvelope)
       await hooks["chat.message"]?.(args.hookInput as never, args.hookOutput as never)
       await hooks.event?.({ event: createIdleEvent(sessionID) as never })
-      await promptAppended.promise
+      await warningWritten.promise
 
       expect(replayFactoryCalls).toBe(0)
-      expect(toastCalls).toHaveLength(1)
-      expect(toastCalls[0]?.body?.variant).toBe("warning")
-      expect(appendPromptCalls).toHaveLength(1)
+      expect(partUpdateCalls).toHaveLength(1)
+      expect(partUpdateCalls[0]).toMatchObject({
+        messageID: "assistant-ambiguous",
+        partID: "assistant-text-ambiguous",
+      })
     } finally {
       globalThis.fetch = previousFetch
     }

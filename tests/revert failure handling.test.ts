@@ -118,7 +118,7 @@ describe("revert failure handling", () => {
     const tracker = createSessionTracker()
     const replayEnvelope = createReplayEnvelope(sessionID, rootMessageID)
     const start = tracker.startTurn({ sessionID, replayEnvelope })
-    const toastCalls: Array<{ body?: { title?: string; message: string; variant: string; duration?: number } }> = []
+    const partUpdateCalls: Array<{ messageID: string; partID: string; part?: unknown }> = []
     let revertCalls = 0
     let promptCalls = 0
 
@@ -136,12 +136,6 @@ describe("revert failure handling", () => {
             throw new Error("snapshot revert failed")
           },
         },
-        tui: {
-          async showToast(input: { body?: { title?: string; message: string; variant: string; duration?: number } }) {
-            toastCalls.push(input)
-            return { data: true }
-          },
-        },
       },
       tracker,
       config: createEnabledConfig(),
@@ -150,6 +144,14 @@ describe("revert failure handling", () => {
       recentToolOutcomes: [],
       directory: "/tmp/opencode-retry",
       serverUrl: new URL("https://example.com"),
+      escalationWarningClientFactory: () => ({
+        part: {
+          async update(input: { messageID: string; partID: string; part?: unknown }) {
+            partUpdateCalls.push(input)
+            return { data: true }
+          },
+        },
+      }),
       replayClientFactory: () => ({
         session: {
           async prompt() {
@@ -165,20 +167,22 @@ describe("revert failure handling", () => {
     expect(promptCalls).toBe(0)
     expect(tracker.getSession(sessionID)?.isEscalated).toBe(true)
     expect(tracker.getSession(sessionID)?.retryCount).toBe(0)
-    expect(toastCalls).toHaveLength(1)
-    expect(toastCalls[0]?.body?.variant).toBe("warning")
+    expect(partUpdateCalls).toHaveLength(1)
+    expect(partUpdateCalls[0]).toMatchObject({
+      messageID: "assistant-truncated",
+      partID: "assistant-text-truncated",
+    })
   })
 
   test("cleans up hook state after replay-revert-failed so the same turn is not retried again", async () => {
     const sessionID = "session-revert-failure-cleanup"
     const rootMessageID = "root-revert-failure-cleanup"
     const replayEnvelope = createReplayEnvelope(sessionID, rootMessageID)
-    const promptAppended = deferred<void>()
+    const partUpdated = deferred<void>()
     let messagesCallCount = 0
     let revertCalls = 0
     let promptCalls = 0
-    const toastCalls: Array<{ body?: { title?: string; message: string; variant: string; duration?: number } }> = []
-    const appendPromptCalls: Array<{ body?: { text: string } }> = []
+    const partUpdateCalls: Array<{ messageID: string; partID: string; part?: unknown }> = []
 
     const hooks = createTruncationRetryHooks(
       {
@@ -196,25 +200,21 @@ describe("revert failure handling", () => {
               throw new Error("snapshot revert failed")
             },
           },
-          tui: {
-            async showToast(input: {
-              body?: { title?: string; message: string; variant: string; duration?: number }
-            }) {
-              toastCalls.push(input)
-              return { data: true }
-            },
-            async appendPrompt(input: { body?: { text: string } }) {
-              appendPromptCalls.push(input)
-              promptAppended.resolve()
-              return { data: true }
-            },
-          },
         } as unknown as PluginInput["client"],
         directory: "/tmp/opencode-retry",
         serverUrl: new URL("https://example.com"),
       },
       {
         config: createEnabledConfig(),
+        escalationWarningClientFactory: () => ({
+          part: {
+            async update(input: { messageID: string; partID: string; part?: unknown }) {
+              partUpdateCalls.push(input)
+              partUpdated.resolve()
+              return { data: true }
+            },
+          },
+        }),
         replayClientFactory: () => ({
           session: {
             async prompt() {
@@ -229,7 +229,7 @@ describe("revert failure handling", () => {
     const args = createChatMessageArgs(replayEnvelope)
     await hooks["chat.message"]?.(args.hookInput as never, args.hookOutput as never)
     await hooks.event?.({ event: createIdleEvent(sessionID) as never })
-    await promptAppended.promise
+    await partUpdated.promise
 
     await hooks.event?.({ event: createIdleEvent(sessionID) as never })
     await Promise.resolve()
@@ -237,8 +237,7 @@ describe("revert failure handling", () => {
     expect(messagesCallCount).toBe(1)
     expect(revertCalls).toBe(1)
     expect(promptCalls).toBe(0)
-    expect(toastCalls).toHaveLength(1)
-    expect(appendPromptCalls).toHaveLength(1)
+    expect(partUpdateCalls).toHaveLength(1)
   })
 
   test("treats a busy revert failure as recoverable and allows the same generation to retry", async () => {

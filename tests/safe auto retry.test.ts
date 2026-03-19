@@ -393,11 +393,6 @@ describe("safe auto retry", () => {
           throw new Error("safe replay should not unrevert")
         },
       },
-      tui: {
-        async showToast() {
-          throw new Error("safe replay should not notify")
-        },
-      },
     } as unknown as PluginInput["client"]
 
     hooks = createTruncationRetryHooks(
@@ -554,14 +549,6 @@ describe("safe auto retry", () => {
             throw new Error("classifier-confirmed safe replay should not unrevert")
           },
         },
-        tui: {
-          async showToast() {
-            throw new Error("classifier-confirmed safe replay should not notify")
-          },
-          async appendPrompt() {
-            throw new Error("classifier-confirmed safe replay should not append prompt")
-          },
-        },
       } as unknown as PluginInput["client"]
 
       hooks = createTruncationRetryHooks(
@@ -644,11 +631,6 @@ describe("safe auto retry", () => {
         },
         async unrevert() {
           throw new Error("read-only bash replay should not unrevert")
-        },
-      },
-      tui: {
-        async showToast() {
-          throw new Error("read-only bash replay should not notify")
         },
       },
     } as unknown as PluginInput["client"]

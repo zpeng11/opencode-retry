@@ -30,7 +30,7 @@ function createFakeClient(messages: unknown[], onMessages?: (sessionID: string) 
   } as unknown as PluginInput["client"]
 }
 
-function createChatMessageArgs(sessionID: string, rootMessageID: string) {
+function createChatMessageArgs(sessionID: string, rootMessageID: string, text = "Finish this safely.") {
   const model = { providerID: "openai", modelID: "gpt-4o" }
   const format = { type: "json_schema", schema: { type: "object", additionalProperties: false } }
   const parts = [
@@ -39,7 +39,7 @@ function createChatMessageArgs(sessionID: string, rootMessageID: string) {
       sessionID,
       messageID: rootMessageID,
       type: "text",
-      text: "Finish this safely.",
+      text,
     },
   ]
 

@@ -73,10 +73,15 @@ describe("retry budget enforced", () => {
     const replayEnvelope = createReplayEnvelope(sessionID, rootMessageID)
     const revertCalls: Array<{ path: { id: string }; body: { messageID: string } }> = []
     const promptCalls: Array<{ sessionID: string; messageID?: string }> = []
-    const toastCalls: Array<{
-      body?: { title?: string; message: string; variant: string; duration?: number }
-    }> = []
-    const appendPromptCalls: Array<{ body?: { text: string } }> = []
+    const partUpdateCalls: Array<{ messageID: string; partID: string; part?: unknown }> = []
+    const escalationWarningClientFactory = () => ({
+      part: {
+        async update(input: { messageID: string; partID: string; part?: unknown }) {
+          partUpdateCalls.push(input)
+          return { data: true }
+        },
+      },
+    })
 
     const client = {
       session: {
@@ -94,18 +99,6 @@ describe("retry budget enforced", () => {
           throw new Error("retry budget path should not unrevert")
         },
       },
-      tui: {
-        async showToast(input: {
-          body?: { title?: string; message: string; variant: string; duration?: number }
-        }) {
-          toastCalls.push(input)
-          return { data: true }
-        },
-        async appendPrompt(input: { body?: { text: string } }) {
-          appendPromptCalls.push(input)
-          return { data: true }
-        },
-      },
     }
 
     const firstTurn = tracker.startTurn({ sessionID, replayEnvelope })
@@ -118,6 +111,7 @@ describe("retry budget enforced", () => {
       recentToolOutcomes: [],
       directory: "/tmp/opencode-retry",
       serverUrl: new URL("https://example.com"),
+      escalationWarningClientFactory,
       replayClientFactory: () => ({
         session: {
           async prompt(input) {
@@ -137,6 +131,7 @@ describe("retry budget enforced", () => {
       recentToolOutcomes: [],
       directory: "/tmp/opencode-retry",
       serverUrl: new URL("https://example.com"),
+      escalationWarningClientFactory,
       replayClientFactory: () => ({
         session: {
           async prompt(input) {
@@ -156,6 +151,7 @@ describe("retry budget enforced", () => {
       recentToolOutcomes: [],
       directory: "/tmp/opencode-retry",
       serverUrl: new URL("https://example.com"),
+      escalationWarningClientFactory,
       replayClientFactory: () => ({
         session: {
           async prompt(input) {
@@ -176,6 +172,7 @@ describe("retry budget enforced", () => {
       recentToolOutcomes: [],
       directory: "/tmp/opencode-retry",
       serverUrl: new URL("https://example.com"),
+      escalationWarningClientFactory,
       replayClientFactory: () => ({
         session: {
           async prompt(input) {
@@ -212,8 +209,10 @@ describe("retry budget enforced", () => {
     ])
     expect(tracker.getSession(sessionID)?.retryCount).toBe(1)
     expect(tracker.getSession(sessionID)?.isEscalated).toBe(false)
-    expect(toastCalls).toHaveLength(1)
-    expect(toastCalls[0]?.body?.variant).toBe("warning")
-    expect(appendPromptCalls).toHaveLength(1)
+    expect(partUpdateCalls).toHaveLength(1)
+    expect(partUpdateCalls[0]).toMatchObject({
+      messageID: "assistant-budget",
+      partID: "assistant-text-budget",
+    })
   })
 })

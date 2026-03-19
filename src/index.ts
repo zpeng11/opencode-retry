@@ -5,6 +5,10 @@ import { resolveHostClassifierConfig } from "./classifier-config.js"
 import { loadConfig } from "./config.js"
 import { MAX_RECENT_TOOL_OUTCOMES, type DetectorToolOutcome } from "./detector.js"
 import {
+  stripEscalationWarningFromAssistantText,
+  type EscalationWarningClientFactory,
+} from "./escalation.js"
+import {
   attemptSafeReplayTransaction,
   type ClassifierConfigResolver,
   listSessionMessages,
@@ -33,6 +37,7 @@ export interface CreateTruncationRetryHooksOptions {
   config?: PluginConfig
   onIdleSnapshot?: (snapshot: IdleSnapshot) => Awaitable<void>
   replayClientFactory?: ReplaySubmissionClientFactory
+  escalationWarningClientFactory?: EscalationWarningClientFactory
 }
 
 function cloneValue<T>(value: T): T {
@@ -198,6 +203,7 @@ export function createTruncationRetryHooks(
       directory: input.directory,
       serverUrl: input.serverUrl,
       replayClientFactory: options.replayClientFactory,
+      escalationWarningClientFactory: options.escalationWarningClientFactory,
     })
 
     if (shouldCleanupAfterReplayResult(replayResult)) {
@@ -223,6 +229,16 @@ export function createTruncationRetryHooks(
   return {
     async config(hostConfig) {
       hostConfigSeed = cloneValue(hostConfig)
+    },
+
+    async "experimental.chat.messages.transform"(_hookInput, hookOutput) {
+      for (const message of hookOutput.messages) {
+        for (const part of message.parts) {
+          if (part.type === "text" && message.info.role === "assistant") {
+            part.text = stripEscalationWarningFromAssistantText(part.text ?? "", part.metadata)
+          }
+        }
+      }
     },
 
     async "chat.message"(hookInput, hookOutput) {

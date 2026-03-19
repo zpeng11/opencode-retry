@@ -75,7 +75,7 @@ describe("replay failure unrevert", () => {
     const start = tracker.startTurn({ sessionID, replayEnvelope })
     const revertCalls: Array<{ path: { id: string }; body: { messageID: string } }> = []
     const unrevertCalls: Array<{ path: { id: string } }> = []
-    const toastCalls: Array<{ body?: { title?: string; message: string; variant: string; duration?: number } }> = []
+    const partUpdateCalls: Array<{ messageID: string; partID: string; part?: unknown }> = []
 
     const result = await attemptSafeReplayTransaction({
       client: {
@@ -95,12 +95,6 @@ describe("replay failure unrevert", () => {
             return { data: true }
           },
         },
-        tui: {
-          async showToast(input: { body?: { title?: string; message: string; variant: string; duration?: number } }) {
-            toastCalls.push(input)
-            return { data: true }
-          },
-        },
       },
       tracker,
       config: createEnabledConfig(),
@@ -109,6 +103,14 @@ describe("replay failure unrevert", () => {
       recentToolOutcomes: [],
       directory: "/tmp/opencode-retry",
       serverUrl: new URL("https://example.com"),
+      escalationWarningClientFactory: () => ({
+        part: {
+          async update(input: { messageID: string; partID: string; part?: unknown }) {
+            partUpdateCalls.push(input)
+            return { data: true }
+          },
+        },
+      }),
       replayClientFactory: () => ({
         session: {
           async prompt() {
@@ -128,8 +130,11 @@ describe("replay failure unrevert", () => {
     expect(unrevertCalls).toEqual([{ path: { id: sessionID } }])
     expect(tracker.getSession(sessionID)?.isEscalated).toBe(true)
     expect(tracker.getSession(sessionID)?.retryCount).toBe(1)
-    expect(toastCalls).toHaveLength(1)
-    expect(toastCalls[0]?.body?.variant).toBe("warning")
+    expect(partUpdateCalls).toHaveLength(1)
+    expect(partUpdateCalls[0]).toMatchObject({
+      messageID: "assistant-failure",
+      partID: "assistant-text-failure",
+    })
   })
 
   test("escalates with replay-rollback-failed when both replay submit and unrevert fail", async () => {
@@ -140,7 +145,7 @@ describe("replay failure unrevert", () => {
     const start = tracker.startTurn({ sessionID, replayEnvelope })
     const revertCalls: Array<{ path: { id: string }; body: { messageID: string } }> = []
     const unrevertCalls: Array<{ path: { id: string } }> = []
-    const toastCalls: Array<{ body?: { title?: string; message: string; variant: string; duration?: number } }> = []
+    const partUpdateCalls: Array<{ messageID: string; partID: string; part?: unknown }> = []
 
     const result = await attemptSafeReplayTransaction({
       client: {
@@ -160,12 +165,6 @@ describe("replay failure unrevert", () => {
             throw new Error("unrevert also failed")
           },
         },
-        tui: {
-          async showToast(input: { body?: { title?: string; message: string; variant: string; duration?: number } }) {
-            toastCalls.push(input)
-            return { data: true }
-          },
-        },
       },
       tracker,
       config: createEnabledConfig(),
@@ -174,6 +173,14 @@ describe("replay failure unrevert", () => {
       recentToolOutcomes: [],
       directory: "/tmp/opencode-retry",
       serverUrl: new URL("https://example.com"),
+      escalationWarningClientFactory: () => ({
+        part: {
+          async update(input: { messageID: string; partID: string; part?: unknown }) {
+            partUpdateCalls.push(input)
+            return { data: true }
+          },
+        },
+      }),
       replayClientFactory: () => ({
         session: {
           async prompt() {
@@ -188,7 +195,10 @@ describe("replay failure unrevert", () => {
     expect(unrevertCalls.length).toBe(1)
     expect(tracker.getSession(sessionID)?.isEscalated).toBe(true)
     expect(tracker.getSession(sessionID)?.retryCount).toBe(1)
-    expect(toastCalls).toHaveLength(1)
-    expect(toastCalls[0]?.body?.variant).toBe("warning")
+    expect(partUpdateCalls).toHaveLength(1)
+    expect(partUpdateCalls[0]).toMatchObject({
+      messageID: "assistant-failure",
+      partID: "assistant-text-failure",
+    })
   })
 })

@@ -116,15 +116,12 @@ function createUnsafeHistory(replayEnvelope: ReplayEnvelope) {
 }
 
 describe("escalation dedupe", () => {
-  test("does not re-toast or re-append after the same turn is already escalated", async () => {
+  test("does not rewrite the transcript warning after the same turn is already escalated", async () => {
     const sessionID = "session-escalation-dedupe"
     const rootMessageID = "root-escalation-dedupe"
     const replayEnvelope = createReplayEnvelope(sessionID, rootMessageID)
-    const promptAppended = deferred<void>()
-    const toastCalls: Array<{
-      body?: { title?: string; message: string; variant: string; duration?: number }
-    }> = []
-    const appendPromptCalls: Array<{ body?: { text: string } }> = []
+    const warningWritten = deferred<void>()
+    const partUpdateCalls: Array<{ messageID: string; partID: string; part?: unknown }> = []
     let messagesCallCount = 0
 
     const hooks = createTruncationRetryHooks(
@@ -139,30 +136,28 @@ describe("escalation dedupe", () => {
               return { data: {} }
             },
           },
-          tui: {
-            async showToast(input: {
-              body?: { title?: string; message: string; variant: string; duration?: number }
-            }) {
-              toastCalls.push(input)
-              return { data: true }
-            },
-            async appendPrompt(input: { body?: { text: string } }) {
-              appendPromptCalls.push(input)
-              promptAppended.resolve()
-              return { data: true }
-            },
-          },
         } as unknown as PluginInput["client"],
+        directory: "/tmp/opencode-retry",
+        serverUrl: new URL("https://example.com"),
       },
       {
         config: createEnabledConfig(),
+        escalationWarningClientFactory: () => ({
+          part: {
+            async update(input: { messageID: string; partID: string; part?: unknown }) {
+              partUpdateCalls.push(input)
+              warningWritten.resolve()
+              return { data: true }
+            },
+          },
+        }),
       },
     )
 
     const args = createChatMessageArgs(replayEnvelope)
     await hooks["chat.message"]?.(args.hookInput as never, args.hookOutput as never)
     await hooks.event?.({ event: createIdleEvent(sessionID) as never })
-    await promptAppended.promise
+    await warningWritten.promise
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     await hooks.event?.({ event: createIdleEvent(sessionID) as never })
@@ -170,7 +165,6 @@ describe("escalation dedupe", () => {
     await Promise.resolve()
 
     expect(messagesCallCount).toBe(1)
-    expect(toastCalls).toHaveLength(1)
-    expect(appendPromptCalls).toHaveLength(1)
+    expect(partUpdateCalls).toHaveLength(1)
   })
 })

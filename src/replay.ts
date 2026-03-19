@@ -1,9 +1,13 @@
 import type { Message, Part } from "@opencode-ai/sdk"
-import { createOpencodeClient as createV2OpencodeClient } from "@opencode-ai/sdk/v2/client"
 
 import { classifyWithSmallModel } from "./classifier.js"
 import { buildClassifierPayload, detectTruncation, type DetectorToolOutcome } from "./detector.js"
-import { escalateToUserJudgment, type JudgmentEscalationReason } from "./escalation.js"
+import {
+  escalateToUserJudgment,
+  type EscalationWarningClientFactory,
+  type JudgmentEscalationReason,
+} from "./escalation.js"
+import { createAuthenticatedServerClient } from "./server-client.js"
 import { assessSideEffects } from "./side-effects.js"
 import type { SessionTracker } from "./tracker.js"
 import {
@@ -33,21 +37,6 @@ export interface ReplayTransactionClient {
     status?: () => Promise<{ data?: unknown }>
     revert?: (parameters: { path: { id: string }; body: { messageID: string; partID?: string } }) => Promise<unknown>
     unrevert?: (parameters: { path: { id: string } }) => Promise<unknown>
-  }
-  tui?: {
-    appendPrompt?: (parameters: {
-      body?: {
-        text: string
-      }
-    }) => Promise<unknown>
-    showToast?: (parameters: {
-      body?: {
-        title?: string
-        message: string
-        variant: "info" | "success" | "warning" | "error"
-        duration?: number
-      }
-    }) => Promise<unknown>
   }
 }
 
@@ -96,6 +85,7 @@ export interface AttemptSafeReplayTransactionInput {
   directory?: string
   serverUrl?: URL
   replayClientFactory?: ReplaySubmissionClientFactory
+  escalationWarningClientFactory?: EscalationWarningClientFactory
 }
 
 export type ReplayIgnoredReason =
@@ -294,6 +284,10 @@ async function handleRevertFailureForReplay(input: {
   sessionID: string
   generation: number
   error: unknown
+  directory?: string
+  serverUrl?: URL
+  messages?: SessionMessageHistory
+  warningClientFactory?: EscalationWarningClientFactory
 }): Promise<ReplayTransactionResult> {
   const current = input.tracker.getSession(input.sessionID)
   if (!current) {
@@ -319,6 +313,10 @@ async function handleRevertFailureForReplay(input: {
     sessionID: input.sessionID,
     generation: input.generation,
     reason: "replay-revert-failed",
+    directory: input.directory,
+    serverUrl: input.serverUrl,
+    messages: input.messages,
+    warningClientFactory: input.warningClientFactory,
   })
   return { outcome: "escalated", reason: "replay-revert-failed" }
 }
@@ -348,17 +346,9 @@ async function listReplayCandidateMessages(
 }
 
 export const createDefaultReplayClientFactory: ReplaySubmissionClientFactory = ({ directory, serverUrl }) => {
-  const password = process.env.OPENCODE_SERVER_PASSWORD
-  const username = process.env.OPENCODE_SERVER_USERNAME ?? "opencode"
-
-  return createV2OpencodeClient({
-    baseUrl: serverUrl.toString(),
+  return createAuthenticatedServerClient({
     directory,
-    headers: password
-      ? {
-          Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
-        }
-      : undefined,
+    serverUrl,
   }) as unknown as ReplaySubmissionClient
 }
 
@@ -504,6 +494,10 @@ export async function attemptSafeReplayTransaction(
       sessionID: input.sessionID,
       generation: input.generation,
       reason: "missing-replay-envelope",
+      directory: input.directory,
+      serverUrl: input.serverUrl,
+      messages,
+      warningClientFactory: input.escalationWarningClientFactory,
     })
     return { outcome: "escalated", reason: "missing-replay-envelope" }
   }
@@ -537,6 +531,10 @@ export async function attemptSafeReplayTransaction(
       sessionID: input.sessionID,
       generation: input.generation,
       reason: turnDisposition.reason as ReplayEscalationReason,
+      directory: input.directory,
+      serverUrl: input.serverUrl,
+      messages,
+      warningClientFactory: input.escalationWarningClientFactory,
     })
     return {
       outcome: "escalated",
@@ -555,6 +553,10 @@ export async function attemptSafeReplayTransaction(
       sessionID: input.sessionID,
       generation: input.generation,
       reason: "retry-budget-exhausted",
+      directory: input.directory,
+      serverUrl: input.serverUrl,
+      messages,
+      warningClientFactory: input.escalationWarningClientFactory,
     })
     return { outcome: "escalated", reason: "retry-budget-exhausted" }
   }
@@ -566,6 +568,10 @@ export async function attemptSafeReplayTransaction(
       sessionID: input.sessionID,
       generation: input.generation,
       reason: "replay-bootstrap-failed",
+      directory: input.directory,
+      serverUrl: input.serverUrl,
+      messages,
+      warningClientFactory: input.escalationWarningClientFactory,
     })
     return { outcome: "escalated", reason: "replay-bootstrap-failed" }
   }
@@ -583,6 +589,10 @@ export async function attemptSafeReplayTransaction(
       sessionID: input.sessionID,
       generation: input.generation,
       reason: "replay-bootstrap-failed",
+      directory: input.directory,
+      serverUrl: input.serverUrl,
+      messages,
+      warningClientFactory: input.escalationWarningClientFactory,
     })
     return { outcome: "escalated", reason: "replay-bootstrap-failed" }
   }
@@ -594,6 +604,10 @@ export async function attemptSafeReplayTransaction(
       sessionID: input.sessionID,
       generation: input.generation,
       reason: "replay-bootstrap-failed",
+      directory: input.directory,
+      serverUrl: input.serverUrl,
+      messages,
+      warningClientFactory: input.escalationWarningClientFactory,
     })
     return { outcome: "escalated", reason: "replay-bootstrap-failed" }
   }
@@ -625,6 +639,10 @@ export async function attemptSafeReplayTransaction(
       sessionID: input.sessionID,
       generation: input.generation,
       error,
+      directory: input.directory,
+      serverUrl: input.serverUrl,
+      messages,
+      warningClientFactory: input.escalationWarningClientFactory,
     })
   }
 
@@ -655,6 +673,10 @@ export async function attemptSafeReplayTransaction(
         sessionID: input.sessionID,
         generation: input.generation,
         reason: "retry-budget-exhausted",
+        directory: input.directory,
+        serverUrl: input.serverUrl,
+        messages,
+        warningClientFactory: input.escalationWarningClientFactory,
       })
       return { outcome: "escalated", reason: "retry-budget-exhausted" }
     }
@@ -692,6 +714,10 @@ export async function attemptSafeReplayTransaction(
       sessionID: input.sessionID,
       generation: input.generation,
       reason: escalationReason,
+      directory: input.directory,
+      serverUrl: input.serverUrl,
+      messages,
+      warningClientFactory: input.escalationWarningClientFactory,
     })
     return { outcome: "escalated", reason: escalationReason }
   }
